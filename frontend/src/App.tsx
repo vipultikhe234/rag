@@ -6,11 +6,16 @@ import { PageErrorBoundary } from './components/ui/PageErrorBoundary'
 import { LoadingBlock } from './components/ui/Spinner'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { ProductFormPage } from './pages/ProductFormPage'
 import { ProductListPage } from './pages/ProductListPage'
 
 // The chat (with its Markdown renderer) is loaded on first visit to keep the initial bundle small.
 const ChatPage = lazy(() => import('./pages/ChatPage').then((module) => ({ default: module.ChatPage })))
+const ProductDetailsPage = lazy(() =>
+  import('./pages/ProductDetailsPage').then((module) => ({ default: module.ProductDetailsPage })),
+)
+const ProductFormPage = lazy(() =>
+  import('./pages/ProductFormPage').then((module) => ({ default: module.ProductFormPage })),
+)
 
 // The catalog admin pages share one lazily loaded chunk for the same reason.
 type CatalogPages = typeof import('./pages/catalog')
@@ -79,15 +84,27 @@ export function App() {
           path="/products/new"
           element={
             <ProtectedRoute requireAdmin>
-              <ProductFormPage mode="create" />
+              <CatalogSuspense>
+                <ProductFormPage mode="create" />
+              </CatalogSuspense>
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/products/:id"
+          element={
+            <CatalogSuspense>
+              <ProductDetailsPage />
+            </CatalogSuspense>
           }
         />
         <Route
           path="/products/:id/edit"
           element={
             <ProtectedRoute requireAdmin>
-              <ProductFormPage mode="edit" />
+              <CatalogSuspense>
+                <ProductFormPage mode="edit" />
+              </CatalogSuspense>
             </ProtectedRoute>
           }
         />

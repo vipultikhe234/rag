@@ -7,4 +7,6 @@ export const deactivateHints = {
     'Existing product values are kept as historical data but can no longer be changed, and the attribute is no longer offered on product forms or filters. You can activate it again at any time.',
   variant:
     'The variant stays on record (for order history and reports) but is marked unavailable. You can activate it again at any time.',
+  product:
+    'The product is hidden from AI Chat answers and its variants can no longer be bought, but all data is kept. You can activate it again at any time.',
 }

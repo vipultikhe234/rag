@@ -225,7 +225,7 @@ class ProductVariantServiceTest {
                 1));
 
         assertThatThrownBy(() -> service.update(created.id(), new ProductVariantRequest(UUID.randomUUID(), "GS24-9",
-                Map.of("Color", "Black"), null, new BigDecimal("100.00"), null, 1, null, null, null, 0L)))
+                Map.of("Color", "Black"), null, new BigDecimal("100.00"), null, 1, null, null, null, null)))
                 .isInstanceOfSatisfying(FieldValidationException.class, e ->
                         assertThat(e.getViolations().getFirst().field()).isEqualTo("productId"));
     }

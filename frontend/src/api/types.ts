@@ -40,17 +40,64 @@ export interface ProductSyncInfo {
   embeddedAt: string | null
 }
 
+export interface ProductImage {
+  id: string
+  url: string
+  altText: string | null
+  position: number
+}
+
+export interface ProductImagePayload {
+  /** Present for images that already exist; new images only send the URL. */
+  id?: string
+  url: string
+  altText?: string | null
+}
+
+export interface ProductOptionValue {
+  id: string
+  value: string
+  position: number
+}
+
+export interface ProductOption {
+  id: string
+  name: string
+  attributeId: string | null
+  /** Unit of a linked NUMBER attribute (e.g. "GB"), appended to values for display. */
+  unit: string | null
+  position: number
+  values: ProductOptionValue[]
+}
+
+export interface ProductOptionPayload {
+  id?: string
+  name: string
+  attributeId?: string | null
+  values: Array<{ id?: string; value: string }>
+}
+
+export interface VariantSummary {
+  count: number
+  activeCount: number
+  minPrice: number | null
+  maxPrice: number | null
+}
+
 export interface Product {
   id: string
   name: string
   sku: string
+  slug: string
   description: string
   category: string
   categoryId: string | null
   brand: string | null
   brandId: string | null
+  /** For variant products: the lowest active variant price (read-only). */
   price: number
   currency: string
+  /** For variant products: the total stock of active variants (read-only). */
   stockQuantity: number
   attributes: Record<string, AttributeValue>
   status: ProductStatus
@@ -58,20 +105,47 @@ export interface Product {
   createdAt: string
   updatedAt: string
   vectorSync: ProductSyncInfo | null
+  hasVariants: boolean
+  images: ProductImage[]
+  options: ProductOption[]
+  variantSummary: VariantSummary
+}
+
+/** A new variant sent together with its product (or in a bulk request for one product). */
+export interface VariantDraft {
+  sku: string
+  /** Option name -> value, e.g. { Color: 'Black', Storage: '256' } */
+  options: Record<string, string>
+  attributes?: Record<string, AttributeValue>
+  price: number
+  compareAtPrice?: number | null
+  stockQuantity: number
+  barcode?: string | null
+  imageId?: string | null
+  /** URL of one of the product's images; used when the image has no id yet. */
+  imageUrl?: string | null
+  status?: CatalogStatus
 }
 
 export interface ProductPayload {
   name: string
   sku: string
+  slug?: string | null
   description: string
   categoryId: string
   brandId?: string | null
-  price: number
+  /** Required for simple products; ignored for variant products. */
+  price?: number | null
   currency: string
-  stockQuantity: number
+  stockQuantity?: number | null
   attributes: Record<string, AttributeValue>
   status?: ProductStatus
   version?: number
+  hasVariants?: boolean
+  images?: ProductImagePayload[]
+  options?: ProductOptionPayload[]
+  /** New variants only; existing variants are edited through the variant endpoints. */
+  variants?: VariantDraft[]
 }
 
 export interface ProductQuery {
@@ -81,6 +155,10 @@ export interface ProductQuery {
   /** "slug:value" pairs for filterable attributes */
   attr?: string[]
   status?: ProductStatus | ''
+  minPrice?: string
+  maxPrice?: string
+  stock?: StockFilter | ''
+  hasVariants?: boolean
   page: number
   size: number
   sort: string
@@ -158,10 +236,17 @@ export interface BrandPayload {
 
 export type AttributeDataType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'SELECT'
 
+export interface AttributeCategoryRef {
+  id: string
+  name: string
+  /** The category's own status. */
+  active: boolean
+}
+
 export interface ProductAttribute {
   id: string
-  categoryId: string
-  categoryName: string | null
+  /** Categories the attribute is assigned to; it also applies to their subcategories. */
+  categories: AttributeCategoryRef[]
   name: string
   slug: string
   dataType: AttributeDataType
@@ -176,7 +261,7 @@ export interface ProductAttribute {
 }
 
 export interface ProductAttributePayload {
-  categoryId: string
+  categoryIds: string[]
   name: string
   slug?: string | null
   dataType: AttributeDataType
@@ -191,21 +276,39 @@ export interface ProductAttributePayload {
 export type StockLevel = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK'
 export type StockFilter = 'AVAILABLE' | StockLevel
 
+/** The value a variant has for one option; `label` includes the unit, e.g. "256 GB". */
+export interface SelectedOption {
+  optionId: string
+  name: string
+  valueId: string
+  value: string
+  label: string
+}
+
 export interface ProductVariant {
   id: string
   productId: string
   productName: string
   productSku: string
   productStatus: ProductStatus
+  categoryId: string | null
+  category: string | null
+  brandId: string | null
+  brand: string | null
   currency: string
   sku: string
+  /** Generated title, e.g. "Black / 256 GB". */
   variantName: string
+  options: SelectedOption[]
   attributes: Record<string, AttributeValue>
   price: number
-  salePrice: number | null
-  effectivePrice: number
+  compareAtPrice: number | null
+  onSale: boolean
   stockQuantity: number
   stockLevel: StockLevel
+  barcode: string | null
+  imageId: string | null
+  imageUrl: string | null
   status: CatalogStatus
   version: number
   createdAt: string
@@ -215,11 +318,13 @@ export interface ProductVariant {
 export interface ProductVariantPayload {
   productId: string
   sku: string
-  variantName: string
+  options: Record<string, string>
   attributes: Record<string, AttributeValue>
   price: number
-  salePrice: number | null
+  compareAtPrice: number | null
   stockQuantity: number
+  barcode?: string | null
+  imageId?: string | null
   status?: CatalogStatus
   version?: number
 }

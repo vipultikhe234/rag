@@ -166,8 +166,7 @@ public class ProductAttributeService {
         boolean slugTaken = id == null ? attributeRepository.existsBySlug(slug)
                 : attributeRepository.existsBySlugAndIdNot(slug, id);
         if (slugTaken) {
-            throw new ConflictException("ATTRIBUTE_ALREADY_EXISTS",
-                    "An attribute with slug '" + slug + "' already exists");
+            throw new ConflictException("SLUG_ALREADY_EXISTS", "An attribute with slug '" + slug + "' already exists");
         }
         List<String> options = normalizeOptions(request.dataType(), request.options());
         attribute.setCategoryIds(categoryIds);

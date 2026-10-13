@@ -42,7 +42,19 @@ class ProductRequestValidationTest {
     void requiredFieldsAreEnforced() {
         ProductRequest request = new ProductRequest(" ", "", "", "", null, null, null, null, null, null, null, null,
                 null);
-        assertThat(invalidFields(request)).contains("name", "sku", "description", "price", "stockQuantity");
+        assertThat(invalidFields(request)).contains("name", "sku", "description");
+    }
+
+    @Test
+    void invalidSlugsAndTooManyOptionsAreRejected() {
+        ProductRequest base = valid();
+        ProductRequest request = new ProductRequest(base.name(), base.sku(), base.description(), base.category(),
+                base.brand(), base.price(), base.currency(), base.stockQuantity(), base.attributes(), null, null,
+                null, null, "Not A Slug", true, null, java.util.Collections.nCopies(4,
+                new com.productrag.catalog.option.dto.ProductOptionRequest(null, "Size", null,
+                        java.util.List.of(new com.productrag.catalog.option.dto.ProductOptionRequest.Value(null,
+                                "S")))), null);
+        assertThat(invalidFields(request)).contains("slug", "options");
     }
 
     @Test

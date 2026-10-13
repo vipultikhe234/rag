@@ -61,11 +61,18 @@ export function AttributeDetailsPage() {
 
       <Card title="Definition">
         <DetailList>
-          <DetailItem label="Category">
-            <Link to={`/categories/${a.categoryId}`} className={linkClass.text}>
-              {a.categoryName}
-            </Link>
-            <span className="block text-xs text-slate-500">Also applies to its subcategories.</span>
+          <DetailItem label={a.categories.length === 1 ? 'Category' : `Categories (${a.categories.length})`}>
+            <span className="flex flex-wrap gap-x-3 gap-y-1">
+              {a.categories.map((category) => (
+                <span key={category.id}>
+                  <Link to={`/categories/${category.id}`} className={linkClass.text}>
+                    {category.name}
+                  </Link>
+                  {!category.active && <span className="text-xs text-slate-500"> (inactive)</span>}
+                </span>
+              ))}
+            </span>
+            <span className="block text-xs text-slate-500">Also applies to their subcategories.</span>
           </DetailItem>
           <DetailItem label="Data type">
             {humanize(a.dataType)}
@@ -94,12 +101,17 @@ export function AttributeDetailsPage() {
         </DetailList>
       </Card>
 
-      {a.filterable && a.status === 'ACTIVE' && (
+      {a.filterable && a.status === 'ACTIVE' && a.categories.length > 0 && (
         <p className="text-sm text-slate-500">
-          The product list can filter{' '}
-          <Link to={`/products?categoryId=${a.categoryId}`} className={linkClass.text}>
-            {a.categoryName} products
-          </Link>{' '}
+          The product list can filter products in{' '}
+          {a.categories.map((category, index) => (
+            <span key={category.id}>
+              {index > 0 && ', '}
+              <Link to={`/products?categoryId=${category.id}`} className={linkClass.text}>
+                {category.name}
+              </Link>
+            </span>
+          ))}{' '}
           by this attribute.
         </p>
       )}

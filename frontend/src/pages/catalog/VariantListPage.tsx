@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { productApi, variantApi } from '../../api/endpoints'
+import { brandApi, categoryApi, productApi, variantApi } from '../../api/endpoints'
 import type { CatalogStatus, StockFilter } from '../../api/types'
 import { useAuth } from '../../auth/authContext'
 import { Card } from '../../components/ui/Card'
@@ -15,6 +15,23 @@ import { formatPrice } from '../../lib/format'
 
 const PAGE_SIZE = 20
 const PRICE = /^\d{0,10}(\.\d{0,2})?$/
+const MAX_OPTION_FILTERS = 5
+const OPTION_FILTER = /^[^:]{1,50}:.{1,100}$/
+
+/** "Color:Black, Storage:256" -> ["Color:Black", "Storage:256"], or an error message. */
+function parseOptionFilters(text: string): { filters: string[]; error?: string } {
+  const filters = text
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+    .map((part) => {
+      const index = part.indexOf(':')
+      return index < 0 ? part : `${part.slice(0, index).trim()}:${part.slice(index + 1).trim()}`
+    })
+  if (filters.length > MAX_OPTION_FILTERS) return { filters, error: `At most ${MAX_OPTION_FILTERS} option filters` }
+  const invalid = filters.find((filter) => !OPTION_FILTER.test(filter))
+  return invalid ? { filters, error: `Use Name:Value, e.g. Color:Black` } : { filters }
+}
 const SORT_OPTIONS = [
   { value: 'createdAt,desc', label: 'Newest first' },
   { value: 'variantName,asc', label: 'Name (A–Z)' },
@@ -37,37 +54,55 @@ export function VariantListPage() {
   const q = params.get('q') ?? ''
   const status = (params.get('status') ?? '') as CatalogStatus | ''
   const productId = params.get('productId') ?? ''
+  const categoryId = params.get('categoryId') ?? ''
+  const brandId = params.get('brandId') ?? ''
   const stock = (params.get('stock') ?? '') as StockFilter | ''
   const minPrice = params.get('minPrice') ?? ''
   const maxPrice = params.get('maxPrice') ?? ''
+  const option = params.getAll('option')
   const sort = params.get('sort') ?? 'createdAt,desc'
   const [searchInput, setSearchInput] = useDebouncedSearch(q, updateParams)
   const [minInput, setMinInput] = useState(minPrice)
   const [maxInput, setMaxInput] = useState(maxPrice)
+  const [optionInput, setOptionInput] = useState(option.join(', '))
 
   const products = useLoader(
-    (signal) => productApi.list({ page: 0, size: 100, sort: 'name,asc' }, signal),
-    'products',
+    (signal) => productApi.list({ hasVariants: true, page: 0, size: 100, sort: 'name,asc' }, signal),
+    'variant-products',
   )
+  const categories = useLoader((signal) => categoryApi.options(true, signal), 'category-options')
+  const brands = useLoader((signal) => brandApi.options(true, signal), 'brand-options')
   const list = useLoader(
     (signal) =>
-      variantApi.list({ q, status, productId, stock, minPrice, maxPrice, page, size: PAGE_SIZE, sort }, signal),
-    JSON.stringify([q, status, productId, stock, minPrice, maxPrice, sort, page]),
+      variantApi.list(
+        { q, status, productId, categoryId, brandId, stock, minPrice, maxPrice, option, page, size: PAGE_SIZE, sort },
+        signal,
+      ),
+    JSON.stringify([q, status, productId, categoryId, brandId, stock, minPrice, maxPrice, option, sort, page]),
   )
-  const filtersActive = Boolean(q || status || productId || stock || minPrice || maxPrice)
+  const filtersActive = Boolean(
+    q || status || productId || categoryId || brandId || stock || minPrice || maxPrice || option.length > 0,
+  )
   const selectedProduct = products.data?.content.find((p) => p.id === productId)
   const priceInvalid = !PRICE.test(minInput.trim()) || !PRICE.test(maxInput.trim())
+  const priceInverted =
+    !priceInvalid && minInput.trim() !== '' && maxInput.trim() !== '' && Number(minInput) > Number(maxInput)
+  const optionParse = parseOptionFilters(optionInput)
 
   const applyPrices = () => {
-    if (priceInvalid) return
+    if (priceInvalid || priceInverted) return
     updateParams({ minPrice: minInput.trim() || null, maxPrice: maxInput.trim() || null })
+  }
+  const applyOptions = () => {
+    if (optionParse.error) return
+    updateParams({ option: optionParse.filters })
   }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title={selectedProduct ? `Variants of ${selectedProduct.name}` : 'Product variants'}
-        description="Sellable versions of a product, such as a colour or storage option, each with its own SKU, price and stock."
+        description="Sellable combinations of a product's options, such as colour and storage, each with its own SKU, price and stock. Variants are deactivated, never deleted."
         actions={
           isAdmin && (
             <Link
@@ -82,19 +117,20 @@ export function VariantListPage() {
 
       <Card>
         <form
-          className="grid gap-4 md:grid-cols-3 xl:grid-cols-[2fr_1.5fr_1fr_0.8fr_0.8fr_1fr_1fr]"
+          className="grid gap-4 md:grid-cols-3 xl:grid-cols-5"
           role="search"
           aria-label="Filter variants"
           onSubmit={(event) => {
             event.preventDefault()
             updateParams({ q: searchInput.trim() || null })
             applyPrices()
+            applyOptions()
           }}
         >
           <TextField
             label="Search"
             type="search"
-            placeholder="Variant name or SKU"
+            placeholder="SKU, variant, product or barcode"
             value={searchInput}
             maxLength={100}
             onChange={(event) => setSearchInput(event.target.value)}
@@ -107,6 +143,37 @@ export function VariantListPage() {
               </option>
             ))}
           </SelectField>
+          <SelectField
+            label="Category"
+            hint="Includes subcategories."
+            value={categoryId}
+            onChange={(event) => updateParams({ categoryId: event.target.value })}
+          >
+            <option value="">All categories</option>
+            {(categories.data ?? []).map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.path}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Brand" value={brandId} onChange={(event) => updateParams({ brandId: event.target.value })}>
+            <option value="">All brands</option>
+            {(brands.data ?? []).map((brand) => (
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
+            ))}
+          </SelectField>
+          <TextField
+            label="Option values"
+            placeholder="Color:Black, Storage:256"
+            value={optionInput}
+            maxLength={600}
+            error={optionParse.error}
+            hint={optionParse.error ? undefined : 'Name:Value pairs, comma-separated (up to 5).'}
+            onChange={(event) => setOptionInput(event.target.value)}
+            onBlur={applyOptions}
+          />
           <SelectField label="Stock" value={stock} onChange={(event) => updateParams({ stock: event.target.value })}>
             <option value="">Any stock</option>
             {STOCK_OPTIONS.map((option) => (
@@ -127,7 +194,13 @@ export function VariantListPage() {
             label="Max price"
             inputMode="decimal"
             value={maxInput}
-            error={!PRICE.test(maxInput.trim()) ? 'Invalid amount' : undefined}
+            error={
+              !PRICE.test(maxInput.trim())
+                ? 'Invalid amount'
+                : priceInverted
+                  ? 'Must be at least the min price'
+                  : undefined
+            }
             onChange={(event) => setMaxInput(event.target.value)}
             onBlur={applyPrices}
           />
@@ -157,7 +230,18 @@ export function VariantListPage() {
               setSearchInput('')
               setMinInput('')
               setMaxInput('')
-              updateParams({ q: null, status: null, productId: null, stock: null, minPrice: null, maxPrice: null })
+              setOptionInput('')
+              updateParams({
+                q: null,
+                status: null,
+                productId: null,
+                categoryId: null,
+                brandId: null,
+                stock: null,
+                minPrice: null,
+                maxPrice: null,
+                option: null,
+              })
             }}
             emptyDescription={isAdmin ? 'Add a variant to sell a product in several versions.' : 'No variants have been created yet.'}
           >
@@ -169,6 +253,7 @@ export function VariantListPage() {
                     <tr>
                       <th scope="col" className={table.th}>Variant</th>
                       <th scope="col" className={table.th}>Product</th>
+                      <th scope="col" className={table.th}>Category / brand</th>
                       <th scope="col" className={`${table.th} text-right`}>Price</th>
                       <th scope="col" className={`${table.th} text-right`}>Stock</th>
                       <th scope="col" className={table.th}>Status</th>
@@ -199,11 +284,15 @@ export function VariantListPage() {
                           </button>
                           <div className="font-mono text-xs text-slate-500">{variant.productSku}</div>
                         </td>
+                        <td className={`${table.td} text-slate-600`}>
+                          {variant.category ?? '—'}
+                          {variant.brand && <div className="text-xs text-slate-500">{variant.brand}</div>}
+                        </td>
                         <td className={`${table.td} whitespace-nowrap text-right tabular-nums`}>
-                          {formatPrice(variant.effectivePrice, variant.currency)}
-                          {variant.salePrice !== null && (
+                          {formatPrice(variant.price, variant.currency)}
+                          {variant.compareAtPrice !== null && (
                             <div className="text-xs text-slate-400 line-through">
-                              {formatPrice(variant.price, variant.currency)}
+                              {formatPrice(variant.compareAtPrice, variant.currency)}
                             </div>
                           )}
                         </td>

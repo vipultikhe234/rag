@@ -24,6 +24,7 @@ import type {
   ProductVariantPayload,
   StockFilter,
   User,
+  VariantDraft,
   VectorSyncEvent,
   VectorSyncStatus,
   VectorSyncStatusSummary,
@@ -58,6 +59,10 @@ export const productApi = {
           brandId: query.brandId || undefined,
           attr: query.attr && query.attr.length > 0 ? query.attr : undefined,
           status: query.status || undefined,
+          minPrice: query.minPrice || undefined,
+          maxPrice: query.maxPrice || undefined,
+          stock: query.stock || undefined,
+          hasVariants: query.hasVariants,
           page: query.page,
           size: query.size,
           sort: query.sort,
@@ -73,6 +78,10 @@ export const productApi = {
   setStatus: (id: string, status: ProductStatus) =>
     api.patch<Product>(`/products/${id}/status`, { status }).then((r) => r.data),
   remove: (id: string) => api.delete<void>(`/products/${id}`).then(() => undefined),
+  variants: (id: string, signal?: AbortSignal) =>
+    api.get<ProductVariant[]>(`/products/${id}/variants`, { signal }).then((r) => r.data),
+  addVariants: (id: string, variants: VariantDraft[]) =>
+    api.post<ProductVariant[]>(`/products/${id}/variants`, { variants }).then((r) => r.data),
 }
 
 export interface CategoryQuery extends ListQuery {
@@ -115,6 +124,7 @@ export interface AttributeQuery extends ListQuery {
   categoryId?: string
   dataType?: AttributeDataType | ''
   filterable?: boolean
+  required?: boolean
 }
 
 export const attributeApi = {
@@ -126,6 +136,7 @@ export const attributeApi = {
           categoryId: query.categoryId || undefined,
           dataType: query.dataType || undefined,
           filterable: query.filterable,
+          required: query.required,
         },
         signal,
       })
@@ -147,9 +158,13 @@ export const attributeApi = {
 
 export interface VariantQuery extends ListQuery {
   productId?: string
+  categoryId?: string
+  brandId?: string
   stock?: StockFilter | ''
   minPrice?: string
   maxPrice?: string
+  /** "Option name:value" pairs, e.g. "Color:Black" (at most 5) */
+  option?: string[]
 }
 
 export const variantApi = {
@@ -159,10 +174,14 @@ export const variantApi = {
         params: {
           ...listParams(query),
           productId: query.productId || undefined,
+          categoryId: query.categoryId || undefined,
+          brandId: query.brandId || undefined,
           stock: query.stock || undefined,
           minPrice: query.minPrice || undefined,
           maxPrice: query.maxPrice || undefined,
+          option: query.option && query.option.length > 0 ? query.option : undefined,
         },
+        paramsSerializer: repeatParams,
         signal,
       })
       .then((r) => r.data),

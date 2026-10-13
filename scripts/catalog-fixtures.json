@@ -1,1656 +1,202 @@
 {
   "categories": [
-    {
-      "name": "Electronics",
-      "slug": "electronics",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Phones, computers and other consumer electronics."
-    },
-    {
-      "name": "Mobile Phones",
-      "slug": "mobile-phones",
-      "parent": "electronics",
-      "status": "ACTIVE",
-      "description": "Smartphones and feature phones."
-    },
-    {
-      "name": "Laptops",
-      "slug": "laptops",
-      "parent": "electronics",
-      "status": "ACTIVE",
-      "description": "Notebooks and ultrabooks for work, study and gaming."
-    },
-    {
-      "name": "Computer Accessories",
-      "slug": "computer-accessories",
-      "parent": "electronics",
-      "status": "ACTIVE",
-      "description": "Keyboards, mice, cables, chargers and other add-ons."
-    },
-    {
-      "name": "Home Appliances",
-      "slug": "home-appliances",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Large and small appliances for the home."
-    },
-    {
-      "name": "Kitchen Appliances",
-      "slug": "kitchen-appliances",
-      "parent": "home-appliances",
-      "status": "ACTIVE",
-      "description": "Mixers, microwaves, kettles and other kitchen machines."
-    },
-    {
-      "name": "Fashion",
-      "slug": "fashion",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Clothing, footwear and accessories."
-    },
-    {
-      "name": "Men's Clothing",
-      "slug": "mens-clothing",
-      "parent": "fashion",
-      "status": "ACTIVE",
-      "description": "Shirts, T-shirts, trousers and jackets for men."
-    },
-    {
-      "name": "Women's Clothing",
-      "slug": "womens-clothing",
-      "parent": "fashion",
-      "status": "ACTIVE",
-      "description": "Tops, dresses, trousers and jackets for women."
-    },
-    {
-      "name": "Kids' Clothing",
-      "slug": "kids-clothing",
-      "parent": "fashion",
-      "status": "INACTIVE",
-      "description": "Clothing for children (currently not offered)."
-    },
-    {
-      "name": "Footwear",
-      "slug": "footwear",
-      "parent": "fashion",
-      "status": "ACTIVE",
-      "description": "Running shoes, sneakers, sandals and formal shoes."
-    },
-    {
-      "name": "Watches",
-      "slug": "watches",
-      "parent": "fashion",
-      "status": "ACTIVE",
-      "description": "Analog watches and smartwatches."
-    },
-    {
-      "name": "Bags and Luggage",
-      "slug": "bags-and-luggage",
-      "parent": "fashion",
-      "status": "ACTIVE",
-      "description": "Backpacks, handbags and travel luggage."
-    },
-    {
-      "name": "Beauty and Personal Care",
-      "slug": "beauty-and-personal-care",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Skincare, haircare and grooming products."
-    },
-    {
-      "name": "Skincare",
-      "slug": "skincare",
-      "parent": "beauty-and-personal-care",
-      "status": "ACTIVE",
-      "description": "Cleansers, moisturisers and sunscreens."
-    },
-    {
-      "name": "Haircare",
-      "slug": "haircare",
-      "parent": "beauty-and-personal-care",
-      "status": "INACTIVE",
-      "description": "Shampoos, conditioners and styling products (currently not offered)."
-    },
-    {
-      "name": "Grocery",
-      "slug": "grocery",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Everyday food and household staples."
-    },
-    {
-      "name": "Beverages",
-      "slug": "beverages",
-      "parent": "grocery",
-      "status": "ACTIVE",
-      "description": "Tea, coffee, juices and soft drinks."
-    },
-    {
-      "name": "Snacks",
-      "slug": "snacks",
-      "parent": "grocery",
-      "status": "ACTIVE",
-      "description": "Chips, biscuits, nuts and other snacks."
-    },
-    {
-      "name": "Home Decor",
-      "slug": "home-decor",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Decorative items, lighting and furnishings."
-    },
-    {
-      "name": "Furniture",
-      "slug": "furniture",
-      "parent": "home-decor",
-      "status": "ACTIVE",
-      "description": "Tables, chairs, beds and storage furniture."
-    },
-    {
-      "name": "Kitchenware",
-      "slug": "kitchenware",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Cookware, utensils and food storage."
-    },
-    {
-      "name": "Sports Equipment",
-      "slug": "sports-equipment",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Equipment for team sports, racket sports and outdoor activities."
-    },
-    {
-      "name": "Fitness Accessories",
-      "slug": "fitness-accessories",
-      "parent": "sports-equipment",
-      "status": "ACTIVE",
-      "description": "Yoga mats, bottles, resistance bands and gym accessories."
-    },
-    {
-      "name": "Books",
-      "slug": "books",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Fiction, non-fiction and educational books."
-    },
-    {
-      "name": "Stationery",
-      "slug": "stationery",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Notebooks, pens and office supplies."
-    },
-    {
-      "name": "Toys and Games",
-      "slug": "toys-and-games",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Toys, puzzles and board games."
-    },
-    {
-      "name": "Baby Products",
-      "slug": "baby-products",
-      "parent": null,
-      "status": "ACTIVE",
-      "description": "Diapers, feeding and baby care products."
-    },
-    {
-      "name": "Automotive Accessories",
-      "slug": "automotive-accessories",
-      "parent": null,
-      "status": "INACTIVE",
-      "description": "Car and bike accessories (currently not offered)."
-    },
-    {
-      "name": "Pet Supplies",
-      "slug": "pet-supplies",
-      "parent": null,
-      "status": "INACTIVE",
-      "description": "Pet food and accessories (currently not offered)."
-    }
+    { "name": "Electronics", "slug": "electronics", "parent": null, "status": "ACTIVE", "description": "Phones, computers and other consumer electronics." },
+    { "name": "Mobile Phones", "slug": "mobile-phones", "parent": "electronics", "status": "ACTIVE", "description": "Smartphones and feature phones." },
+    { "name": "Laptops", "slug": "laptops", "parent": "electronics", "status": "ACTIVE", "description": "Notebooks and ultrabooks for work, study and gaming." },
+    { "name": "Computer Accessories", "slug": "computer-accessories", "parent": "electronics", "status": "ACTIVE", "description": "Keyboards, mice, cables, chargers and other add-ons." },
+    { "name": "Home Appliances", "slug": "home-appliances", "parent": null, "status": "ACTIVE", "description": "Large and small appliances for the home." },
+    { "name": "Kitchen Appliances", "slug": "kitchen-appliances", "parent": "home-appliances", "status": "ACTIVE", "description": "Mixers, microwaves, kettles and other kitchen machines." },
+    { "name": "Fashion", "slug": "fashion", "parent": null, "status": "ACTIVE", "description": "Clothing, footwear and accessories." },
+    { "name": "Men's Clothing", "slug": "mens-clothing", "parent": "fashion", "status": "ACTIVE", "description": "Shirts, T-shirts, trousers and jackets for men." },
+    { "name": "Women's Clothing", "slug": "womens-clothing", "parent": "fashion", "status": "ACTIVE", "description": "Tops, dresses, trousers and jackets for women." },
+    { "name": "Kids' Clothing", "slug": "kids-clothing", "parent": "fashion", "status": "INACTIVE", "description": "Clothing for children (currently not offered)." },
+    { "name": "Footwear", "slug": "footwear", "parent": "fashion", "status": "ACTIVE", "description": "Running shoes, sneakers, sandals and formal shoes." },
+    { "name": "Watches", "slug": "watches", "parent": "fashion", "status": "ACTIVE", "description": "Analog watches and smartwatches." },
+    { "name": "Bags and Luggage", "slug": "bags-and-luggage", "parent": "fashion", "status": "ACTIVE", "description": "Backpacks, handbags and travel luggage." },
+    { "name": "Beauty and Personal Care", "slug": "beauty-and-personal-care", "parent": null, "status": "ACTIVE", "description": "Skincare, haircare and grooming products." },
+    { "name": "Skincare", "slug": "skincare", "parent": "beauty-and-personal-care", "status": "ACTIVE", "description": "Cleansers, moisturisers and sunscreens." },
+    { "name": "Haircare", "slug": "haircare", "parent": "beauty-and-personal-care", "status": "INACTIVE", "description": "Shampoos, conditioners and styling products (currently not offered)." },
+    { "name": "Grocery", "slug": "grocery", "parent": null, "status": "ACTIVE", "description": "Everyday food and household staples." },
+    { "name": "Beverages", "slug": "beverages", "parent": "grocery", "status": "ACTIVE", "description": "Tea, coffee, juices and soft drinks." },
+    { "name": "Snacks", "slug": "snacks", "parent": "grocery", "status": "ACTIVE", "description": "Chips, biscuits, nuts and other snacks." },
+    { "name": "Home Decor", "slug": "home-decor", "parent": null, "status": "ACTIVE", "description": "Decorative items, lighting and furnishings." },
+    { "name": "Furniture", "slug": "furniture", "parent": "home-decor", "status": "ACTIVE", "description": "Tables, chairs, beds and storage furniture." },
+    { "name": "Kitchenware", "slug": "kitchenware", "parent": null, "status": "ACTIVE", "description": "Cookware, utensils and food storage." },
+    { "name": "Sports Equipment", "slug": "sports-equipment", "parent": null, "status": "ACTIVE", "description": "Equipment for team sports, racket sports and outdoor activities." },
+    { "name": "Fitness Accessories", "slug": "fitness-accessories", "parent": "sports-equipment", "status": "ACTIVE", "description": "Yoga mats, bottles, resistance bands and gym accessories." },
+    { "name": "Books", "slug": "books", "parent": null, "status": "ACTIVE", "description": "Fiction, non-fiction and educational books." },
+    { "name": "Stationery", "slug": "stationery", "parent": null, "status": "ACTIVE", "description": "Notebooks, pens and office supplies." },
+    { "name": "Toys and Games", "slug": "toys-and-games", "parent": null, "status": "ACTIVE", "description": "Toys, puzzles and board games." },
+    { "name": "Baby Products", "slug": "baby-products", "parent": null, "status": "ACTIVE", "description": "Diapers, feeding and baby care products." },
+    { "name": "Automotive Accessories", "slug": "automotive-accessories", "parent": null, "status": "INACTIVE", "description": "Car and bike accessories (currently not offered)." },
+    { "name": "Pet Supplies", "slug": "pet-supplies", "parent": null, "status": "INACTIVE", "description": "Pet food and accessories (currently not offered)." }
   ],
   "brands": [
-    {
-      "name": "Samsung",
-      "slug": "samsung",
-      "websiteUrl": "https://www.samsung.com",
-      "status": "ACTIVE",
-      "description": "Consumer electronics and home appliances."
-    },
-    {
-      "name": "Apple",
-      "slug": "apple",
-      "websiteUrl": "https://www.apple.com",
-      "status": "ACTIVE",
-      "description": "Smartphones, computers and wearables."
-    },
-    {
-      "name": "Dell",
-      "slug": "dell",
-      "websiteUrl": "https://www.dell.com",
-      "status": "ACTIVE",
-      "description": "Laptops, desktops and monitors."
-    },
-    {
-      "name": "HP",
-      "slug": "hp",
-      "websiteUrl": "https://www.hp.com",
-      "status": "ACTIVE",
-      "description": "Laptops, printers and accessories."
-    },
-    {
-      "name": "Lenovo",
-      "slug": "lenovo",
-      "websiteUrl": "https://www.lenovo.com",
-      "status": "ACTIVE",
-      "description": "Laptops, tablets and desktops."
-    },
-    {
-      "name": "ASUS",
-      "slug": "asus",
-      "websiteUrl": "https://www.asus.com",
-      "status": "ACTIVE",
-      "description": "Laptops, motherboards and networking."
-    },
-    {
-      "name": "Acer",
-      "slug": "acer",
-      "websiteUrl": "https://www.acer.com",
-      "status": "INACTIVE",
-      "description": "Laptops and monitors (not currently stocked)."
-    },
-    {
-      "name": "Sony",
-      "slug": "sony",
-      "websiteUrl": "https://www.sony.com",
-      "status": "ACTIVE",
-      "description": "Audio, cameras and entertainment electronics."
-    },
-    {
-      "name": "LG",
-      "slug": "lg",
-      "websiteUrl": "https://www.lg.com",
-      "status": "ACTIVE",
-      "description": "Televisions and home appliances."
-    },
-    {
-      "name": "Xiaomi",
-      "slug": "xiaomi",
-      "websiteUrl": "https://www.mi.com",
-      "status": "ACTIVE",
-      "description": "Smartphones and smart home devices."
-    },
-    {
-      "name": "OnePlus",
-      "slug": "oneplus",
-      "websiteUrl": "https://www.oneplus.com",
-      "status": "ACTIVE",
-      "description": "Smartphones and audio accessories."
-    },
-    {
-      "name": "Motorola",
-      "slug": "motorola",
-      "websiteUrl": "https://www.motorola.com",
-      "status": "ACTIVE",
-      "description": "Smartphones."
-    },
-    {
-      "name": "Realme",
-      "slug": "realme",
-      "websiteUrl": "https://www.realme.com",
-      "status": "ACTIVE",
-      "description": "Smartphones and accessories."
-    },
-    {
-      "name": "boAt",
-      "slug": "boat",
-      "websiteUrl": "https://www.boat-lifestyle.com",
-      "status": "ACTIVE",
-      "description": "Audio products and smartwatches."
-    },
-    {
-      "name": "JBL",
-      "slug": "jbl",
-      "websiteUrl": "https://www.jbl.com",
-      "status": "ACTIVE",
-      "description": "Speakers and headphones."
-    },
-    {
-      "name": "Logitech",
-      "slug": "logitech",
-      "websiteUrl": "https://www.logitech.com",
-      "status": "ACTIVE",
-      "description": "Computer peripherals."
-    },
-    {
-      "name": "Canon",
-      "slug": "canon",
-      "websiteUrl": "https://www.canon.com",
-      "status": "ACTIVE",
-      "description": "Cameras and printers."
-    },
-    {
-      "name": "Nikon",
-      "slug": "nikon",
-      "websiteUrl": "https://www.nikon.com",
-      "status": "INACTIVE",
-      "description": "Cameras and optics (not currently stocked)."
-    },
-    {
-      "name": "Nike",
-      "slug": "nike",
-      "websiteUrl": "https://www.nike.com",
-      "status": "ACTIVE",
-      "description": "Sportswear and footwear."
-    },
-    {
-      "name": "Adidas",
-      "slug": "adidas",
-      "websiteUrl": "https://www.adidas.com",
-      "status": "ACTIVE",
-      "description": "Sportswear and footwear."
-    },
-    {
-      "name": "Puma",
-      "slug": "puma",
-      "websiteUrl": "https://www.puma.com",
-      "status": "ACTIVE",
-      "description": "Sportswear, footwear and bags."
-    },
-    {
-      "name": "Reebok",
-      "slug": "reebok",
-      "websiteUrl": "https://www.reebok.com",
-      "status": "INACTIVE",
-      "description": "Sportswear and footwear (not currently stocked)."
-    },
-    {
-      "name": "Levi's",
-      "slug": "levis",
-      "websiteUrl": "https://www.levi.com",
-      "status": "ACTIVE",
-      "description": "Denim and casual wear."
-    },
-    {
-      "name": "H&M",
-      "slug": "h-and-m",
-      "websiteUrl": "https://www.hm.com",
-      "status": "ACTIVE",
-      "description": "Fashion clothing."
-    },
-    {
-      "name": "Zara",
-      "slug": "zara",
-      "websiteUrl": "https://www.zara.com",
-      "status": "ACTIVE",
-      "description": "Fashion clothing."
-    },
-    {
-      "name": "Philips",
-      "slug": "philips",
-      "websiteUrl": "https://www.philips.com",
-      "status": "ACTIVE",
-      "description": "Personal care and home appliances."
-    },
-    {
-      "name": "Whirlpool",
-      "slug": "whirlpool",
-      "websiteUrl": "https://www.whirlpool.com",
-      "status": "ACTIVE",
-      "description": "Home appliances."
-    },
-    {
-      "name": "Bosch",
-      "slug": "bosch",
-      "websiteUrl": "https://www.bosch.com",
-      "status": "ACTIVE",
-      "description": "Home appliances and power tools."
-    },
-    {
-      "name": "Havells",
-      "slug": "havells",
-      "websiteUrl": "https://www.havells.com",
-      "status": "ACTIVE",
-      "description": "Electrical and kitchen appliances."
-    },
-    {
-      "name": "Decathlon",
-      "slug": "decathlon",
-      "websiteUrl": "https://www.decathlon.com",
-      "status": "ACTIVE",
-      "description": "Sports equipment and sportswear."
-    }
+    { "name": "Samsung", "slug": "samsung", "websiteUrl": "https://www.samsung.com", "status": "ACTIVE", "description": "Consumer electronics and home appliances." },
+    { "name": "Apple", "slug": "apple", "websiteUrl": "https://www.apple.com", "status": "ACTIVE", "description": "Smartphones, computers and wearables." },
+    { "name": "Dell", "slug": "dell", "websiteUrl": "https://www.dell.com", "status": "ACTIVE", "description": "Laptops, desktops and monitors." },
+    { "name": "HP", "slug": "hp", "websiteUrl": "https://www.hp.com", "status": "ACTIVE", "description": "Laptops, printers and accessories." },
+    { "name": "Lenovo", "slug": "lenovo", "websiteUrl": "https://www.lenovo.com", "status": "ACTIVE", "description": "Laptops, tablets and desktops." },
+    { "name": "ASUS", "slug": "asus", "websiteUrl": "https://www.asus.com", "status": "ACTIVE", "description": "Laptops, motherboards and networking." },
+    { "name": "Acer", "slug": "acer", "websiteUrl": "https://www.acer.com", "status": "INACTIVE", "description": "Laptops and monitors (not currently stocked)." },
+    { "name": "Sony", "slug": "sony", "websiteUrl": "https://www.sony.com", "status": "ACTIVE", "description": "Audio, cameras and entertainment electronics." },
+    { "name": "LG", "slug": "lg", "websiteUrl": "https://www.lg.com", "status": "ACTIVE", "description": "Televisions and home appliances." },
+    { "name": "Xiaomi", "slug": "xiaomi", "websiteUrl": "https://www.mi.com", "status": "ACTIVE", "description": "Smartphones and smart home devices." },
+    { "name": "OnePlus", "slug": "oneplus", "websiteUrl": "https://www.oneplus.com", "status": "ACTIVE", "description": "Smartphones and audio accessories." },
+    { "name": "Motorola", "slug": "motorola", "websiteUrl": "https://www.motorola.com", "status": "ACTIVE", "description": "Smartphones." },
+    { "name": "Realme", "slug": "realme", "websiteUrl": "https://www.realme.com", "status": "ACTIVE", "description": "Smartphones and accessories." },
+    { "name": "boAt", "slug": "boat", "websiteUrl": "https://www.boat-lifestyle.com", "status": "ACTIVE", "description": "Audio products and smartwatches." },
+    { "name": "JBL", "slug": "jbl", "websiteUrl": "https://www.jbl.com", "status": "ACTIVE", "description": "Speakers and headphones." },
+    { "name": "Logitech", "slug": "logitech", "websiteUrl": "https://www.logitech.com", "status": "ACTIVE", "description": "Computer peripherals." },
+    { "name": "Canon", "slug": "canon", "websiteUrl": "https://www.canon.com", "status": "ACTIVE", "description": "Cameras and printers." },
+    { "name": "Nikon", "slug": "nikon", "websiteUrl": "https://www.nikon.com", "status": "INACTIVE", "description": "Cameras and optics (not currently stocked)." },
+    { "name": "Nike", "slug": "nike", "websiteUrl": "https://www.nike.com", "status": "ACTIVE", "description": "Sportswear and footwear." },
+    { "name": "Adidas", "slug": "adidas", "websiteUrl": "https://www.adidas.com", "status": "ACTIVE", "description": "Sportswear and footwear." },
+    { "name": "Puma", "slug": "puma", "websiteUrl": "https://www.puma.com", "status": "ACTIVE", "description": "Sportswear, footwear and bags." },
+    { "name": "Reebok", "slug": "reebok", "websiteUrl": "https://www.reebok.com", "status": "INACTIVE", "description": "Sportswear and footwear (not currently stocked)." },
+    { "name": "Levi's", "slug": "levis", "websiteUrl": "https://www.levi.com", "status": "ACTIVE", "description": "Denim and casual wear." },
+    { "name": "H&M", "slug": "h-and-m", "websiteUrl": "https://www.hm.com", "status": "ACTIVE", "description": "Fashion clothing." },
+    { "name": "Zara", "slug": "zara", "websiteUrl": "https://www.zara.com", "status": "ACTIVE", "description": "Fashion clothing." },
+    { "name": "Philips", "slug": "philips", "websiteUrl": "https://www.philips.com", "status": "ACTIVE", "description": "Personal care and home appliances." },
+    { "name": "Whirlpool", "slug": "whirlpool", "websiteUrl": "https://www.whirlpool.com", "status": "ACTIVE", "description": "Home appliances." },
+    { "name": "Bosch", "slug": "bosch", "websiteUrl": "https://www.bosch.com", "status": "ACTIVE", "description": "Home appliances and power tools." },
+    { "name": "Havells", "slug": "havells", "websiteUrl": "https://www.havells.com", "status": "ACTIVE", "description": "Electrical and kitchen appliances." },
+    { "name": "Decathlon", "slug": "decathlon", "websiteUrl": "https://www.decathlon.com", "status": "ACTIVE", "description": "Sports equipment and sportswear." }
   ],
   "attributes": [
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "RAM",
-      "slug": "ram",
-      "dataType": "NUMBER",
-      "unit": "GB",
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Storage Capacity",
-      "slug": "storage-capacity",
-      "dataType": "NUMBER",
-      "unit": "GB",
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Processor",
-      "slug": "processor",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Snapdragon 8 Gen 3",
-        "Exynos 2400",
-        "Apple A16 Bionic",
-        "Apple A17 Pro",
-        "MediaTek Dimensity 9300",
-        "Intel Core i5",
-        "Intel Core i7",
-        "AMD Ryzen 5",
-        "AMD Ryzen 7",
-        "Apple M3"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Screen Size",
-      "slug": "screen-size",
-      "dataType": "NUMBER",
-      "unit": "inches",
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "mobile-phones"
-      ],
-      "name": "Battery Capacity",
-      "slug": "battery-capacity",
-      "dataType": "NUMBER",
-      "unit": "mAh",
-      "options": [],
-      "required": false,
-      "filterable": false,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Operating System",
-      "slug": "operating-system",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Android",
-        "iOS",
-        "Windows 11",
-        "macOS",
-        "ChromeOS",
-        "Linux"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "mobile-phones"
-      ],
-      "name": "Camera Resolution",
-      "slug": "camera-resolution",
-      "dataType": "NUMBER",
-      "unit": "MP",
-      "options": [],
-      "required": false,
-      "filterable": false,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "mobile-phones"
-      ],
-      "name": "Network Support",
-      "slug": "network-support",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "4G",
-        "5G"
-      ],
-      "required": true,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Color",
-      "slug": "color",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Black",
-        "White",
-        "Blue",
-        "Navy",
-        "Red",
-        "Green",
-        "Grey",
-        "Pink",
-        "Yellow",
-        "Beige"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Material",
-      "slug": "material",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Cotton",
-        "Polyester",
-        "Denim",
-        "Wool",
-        "Leather",
-        "Nylon",
-        "Mesh",
-        "Silicone",
-        "Stainless Steel"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Clothing Size",
-      "slug": "clothing-size",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "XS",
-        "S",
-        "M",
-        "L",
-        "XL",
-        "XXL"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "footwear"
-      ],
-      "name": "Shoe Size",
-      "slug": "shoe-size",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "UK 5",
-        "UK 6",
-        "UK 7",
-        "UK 8",
-        "UK 9",
-        "UK 10",
-        "UK 11",
-        "UK 12"
-      ],
-      "required": true,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Gender",
-      "slug": "gender",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Men",
-        "Women",
-        "Unisex",
-        "Boys",
-        "Girls"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "laptops"
-      ],
-      "name": "Weight",
-      "slug": "weight",
-      "dataType": "NUMBER",
-      "unit": "kg",
-      "options": [],
-      "required": false,
-      "filterable": false,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "home-appliances"
-      ],
-      "name": "Dimensions",
-      "slug": "dimensions",
-      "dataType": "STRING",
-      "unit": null,
-      "options": [],
-      "required": false,
-      "filterable": false,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "home-appliances"
-      ],
-      "name": "Power Consumption",
-      "slug": "power-consumption",
-      "dataType": "NUMBER",
-      "unit": "watts",
-      "options": [],
-      "required": false,
-      "filterable": false,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "kitchen-appliances"
-      ],
-      "name": "Appliance Capacity",
-      "slug": "appliance-capacity",
-      "dataType": "NUMBER",
-      "unit": "litres",
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Warranty Period",
-      "slug": "warranty-period",
-      "dataType": "NUMBER",
-      "unit": "months",
-      "options": [],
-      "required": false,
-      "filterable": false,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "watches"
-      ],
-      "name": "Water Resistance",
-      "slug": "water-resistance",
-      "dataType": "BOOLEAN",
-      "unit": null,
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Bluetooth Support",
-      "slug": "bluetooth-support",
-      "dataType": "BOOLEAN",
-      "unit": null,
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Wi-Fi Support",
-      "slug": "wi-fi-support",
-      "dataType": "BOOLEAN",
-      "unit": null,
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "USB Type",
-      "slug": "usb-type",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "USB-C",
-        "Micro-USB",
-        "USB-A",
-        "Lightning",
-        "Thunderbolt 4"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Refresh Rate",
-      "slug": "refresh-rate",
-      "dataType": "NUMBER",
-      "unit": "Hz",
-      "options": [],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "electronics"
-      ],
-      "name": "Display Resolution",
-      "slug": "display-resolution",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "HD",
-        "Full HD",
-        "QHD",
-        "4K UHD",
-        "Retina"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Fabric Type",
-      "slug": "fabric-type",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Jersey",
-        "Woven",
-        "Knitted",
-        "Fleece",
-        "Twill"
-      ],
-      "required": false,
-      "filterable": false,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Pattern",
-      "slug": "pattern",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Solid",
-        "Striped",
-        "Checked",
-        "Printed",
-        "Graphic"
-      ],
-      "required": false,
-      "filterable": false,
-      "status": "INACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Fit Type",
-      "slug": "fit-type",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "Slim Fit",
-        "Regular Fit",
-        "Relaxed Fit",
-        "Oversized"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "toys-and-games"
-      ],
-      "name": "Age Group",
-      "slug": "age-group",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "0-2 years",
-        "3-5 years",
-        "6-8 years",
-        "9-12 years",
-        "13+ years"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    },
-    {
-      "categories": [
-        "fashion"
-      ],
-      "name": "Country of Origin",
-      "slug": "country-of-origin",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "India",
-        "China",
-        "Vietnam",
-        "Bangladesh",
-        "Indonesia",
-        "Sri Lanka"
-      ],
-      "required": false,
-      "filterable": false,
-      "status": "INACTIVE"
-    },
-    {
-      "categories": [
-        "home-appliances"
-      ],
-      "name": "Energy Rating",
-      "slug": "energy-rating",
-      "dataType": "SELECT",
-      "unit": null,
-      "options": [
-        "1 Star",
-        "2 Star",
-        "3 Star",
-        "4 Star",
-        "5 Star"
-      ],
-      "required": false,
-      "filterable": true,
-      "status": "ACTIVE"
-    }
+    { "categories": ["electronics"], "name": "RAM", "slug": "ram", "dataType": "NUMBER", "unit": "GB", "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Storage Capacity", "slug": "storage-capacity", "dataType": "NUMBER", "unit": "GB", "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Processor", "slug": "processor", "dataType": "SELECT", "unit": null, "options": ["Snapdragon 8 Gen 3", "Exynos 2400", "Apple A16 Bionic", "Apple A17 Pro", "MediaTek Dimensity 9300", "Intel Core i5", "Intel Core i7", "AMD Ryzen 5", "AMD Ryzen 7", "Apple M3"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Screen Size", "slug": "screen-size", "dataType": "NUMBER", "unit": "inches", "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["mobile-phones"], "name": "Battery Capacity", "slug": "battery-capacity", "dataType": "NUMBER", "unit": "mAh", "options": [], "required": false, "filterable": false, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Operating System", "slug": "operating-system", "dataType": "SELECT", "unit": null, "options": ["Android", "iOS", "Windows 11", "macOS", "ChromeOS", "Linux"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["mobile-phones"], "name": "Camera Resolution", "slug": "camera-resolution", "dataType": "NUMBER", "unit": "MP", "options": [], "required": false, "filterable": false, "status": "ACTIVE" },
+    { "categories": ["mobile-phones"], "name": "Network Support", "slug": "network-support", "dataType": "SELECT", "unit": null, "options": ["4G", "5G"], "required": true, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["fashion"], "name": "Color", "slug": "color", "dataType": "SELECT", "unit": null, "options": ["Black", "White", "Blue", "Navy", "Red", "Green", "Grey", "Pink", "Yellow", "Beige"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["fashion"], "name": "Material", "slug": "material", "dataType": "SELECT", "unit": null, "options": ["Cotton", "Polyester", "Denim", "Wool", "Leather", "Nylon", "Mesh", "Silicone", "Stainless Steel"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["fashion"], "name": "Clothing Size", "slug": "clothing-size", "dataType": "SELECT", "unit": null, "options": ["XS", "S", "M", "L", "XL", "XXL"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["footwear"], "name": "Shoe Size", "slug": "shoe-size", "dataType": "SELECT", "unit": null, "options": ["UK 5", "UK 6", "UK 7", "UK 8", "UK 9", "UK 10", "UK 11", "UK 12"], "required": true, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["fashion"], "name": "Gender", "slug": "gender", "dataType": "SELECT", "unit": null, "options": ["Men", "Women", "Unisex", "Boys", "Girls"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["laptops"], "name": "Weight", "slug": "weight", "dataType": "NUMBER", "unit": "kg", "options": [], "required": false, "filterable": false, "status": "ACTIVE" },
+    { "categories": ["home-appliances"], "name": "Dimensions", "slug": "dimensions", "dataType": "STRING", "unit": null, "options": [], "required": false, "filterable": false, "status": "ACTIVE" },
+    { "categories": ["home-appliances"], "name": "Power Consumption", "slug": "power-consumption", "dataType": "NUMBER", "unit": "watts", "options": [], "required": false, "filterable": false, "status": "ACTIVE" },
+    { "categories": ["kitchen-appliances"], "name": "Appliance Capacity", "slug": "appliance-capacity", "dataType": "NUMBER", "unit": "litres", "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Warranty Period", "slug": "warranty-period", "dataType": "NUMBER", "unit": "months", "options": [], "required": false, "filterable": false, "status": "ACTIVE" },
+    { "categories": ["watches"], "name": "Water Resistance", "slug": "water-resistance", "dataType": "BOOLEAN", "unit": null, "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Bluetooth Support", "slug": "bluetooth-support", "dataType": "BOOLEAN", "unit": null, "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Wi-Fi Support", "slug": "wi-fi-support", "dataType": "BOOLEAN", "unit": null, "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "USB Type", "slug": "usb-type", "dataType": "SELECT", "unit": null, "options": ["USB-C", "Micro-USB", "USB-A", "Lightning", "Thunderbolt 4"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Refresh Rate", "slug": "refresh-rate", "dataType": "NUMBER", "unit": "Hz", "options": [], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["electronics"], "name": "Display Resolution", "slug": "display-resolution", "dataType": "SELECT", "unit": null, "options": ["HD", "Full HD", "QHD", "4K UHD", "Retina"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["fashion"], "name": "Fabric Type", "slug": "fabric-type", "dataType": "SELECT", "unit": null, "options": ["Jersey", "Woven", "Knitted", "Fleece", "Twill"], "required": false, "filterable": false, "status": "ACTIVE" },
+    { "categories": ["fashion"], "name": "Pattern", "slug": "pattern", "dataType": "SELECT", "unit": null, "options": ["Solid", "Striped", "Checked", "Printed", "Graphic"], "required": false, "filterable": false, "status": "INACTIVE" },
+    { "categories": ["fashion"], "name": "Fit Type", "slug": "fit-type", "dataType": "SELECT", "unit": null, "options": ["Slim Fit", "Regular Fit", "Relaxed Fit", "Oversized"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["toys-and-games"], "name": "Age Group", "slug": "age-group", "dataType": "SELECT", "unit": null, "options": ["0-2 years", "3-5 years", "6-8 years", "9-12 years", "13+ years"], "required": false, "filterable": true, "status": "ACTIVE" },
+    { "categories": ["fashion"], "name": "Country of Origin", "slug": "country-of-origin", "dataType": "SELECT", "unit": null, "options": ["India", "China", "Vietnam", "Bangladesh", "Indonesia", "Sri Lanka"], "required": false, "filterable": false, "status": "INACTIVE" },
+    { "categories": ["home-appliances"], "name": "Energy Rating", "slug": "energy-rating", "dataType": "SELECT", "unit": null, "options": ["1 Star", "2 Star", "3 Star", "4 Star", "5 Star"], "required": false, "filterable": true, "status": "ACTIVE" }
   ],
   "products": [
     {
-      "name": "Samsung Galaxy S24",
-      "sku": "SAM-GS24",
-      "category": "mobile-phones",
-      "brand": "samsung",
+      "name": "Samsung Galaxy S24", "sku": "SAM-GS24", "category": "mobile-phones", "brand": "samsung",
       "description": "Samsung Galaxy S24 smartphone with a 6.2-inch 120 Hz AMOLED display, Exynos 2400 processor, 50 MP triple camera and 5G support.",
-      "currency": "INR",
-      "attributes": {
-        "ram": 8,
-        "processor": "Exynos 2400",
-        "operating-system": "Android",
-        "screen-size": 6.2,
-        "refresh-rate": 120,
-        "battery-capacity": 4000,
-        "camera-resolution": 50,
-        "network-support": "5G",
-        "bluetooth-support": true,
-        "wi-fi-support": true,
-        "usb-type": "USB-C",
-        "warranty-period": 12
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Color",
-          "attribute": null,
-          "values": [
-            "Cobalt Violet",
-            "Marble Grey",
-            "Onyx Black"
-          ]
-        },
-        {
-          "name": "Storage Capacity",
-          "attribute": "storage-capacity",
-          "values": [
-            "128",
-            "256",
-            "512"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "ram": 8, "processor": "Exynos 2400", "operating-system": "Android", "screen-size": 6.2, "refresh-rate": 120, "battery-capacity": 4000, "camera-resolution": 50, "network-support": "5G", "bluetooth-support": true, "wi-fi-support": true, "usb-type": "USB-C", "warranty-period": 12 },
+      "options": [{ "name": "Color", "attribute": null, "values": ["Cobalt Violet", "Marble Grey", "Onyx Black"] }, { "name": "Storage Capacity", "attribute": "storage-capacity", "values": ["128", "256", "512"] }]
     },
     {
-      "name": "Apple iPhone 15",
-      "sku": "APL-IP15",
-      "category": "mobile-phones",
-      "brand": "apple",
+      "name": "Apple iPhone 15", "sku": "APL-IP15", "category": "mobile-phones", "brand": "apple",
       "description": "Apple iPhone 15 with a 6.1-inch Super Retina display, A16 Bionic chip, 48 MP main camera, USB-C charging and 5G.",
-      "currency": "INR",
-      "attributes": {
-        "ram": 6,
-        "processor": "Apple A16 Bionic",
-        "operating-system": "iOS",
-        "screen-size": 6.1,
-        "refresh-rate": 60,
-        "battery-capacity": 3349,
-        "camera-resolution": 48,
-        "network-support": "5G",
-        "bluetooth-support": true,
-        "wi-fi-support": true,
-        "usb-type": "USB-C",
-        "warranty-period": 12
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Color",
-          "attribute": null,
-          "values": [
-            "Black",
-            "Blue",
-            "Pink"
-          ]
-        },
-        {
-          "name": "Storage Capacity",
-          "attribute": "storage-capacity",
-          "values": [
-            "128",
-            "256",
-            "512"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "ram": 6, "processor": "Apple A16 Bionic", "operating-system": "iOS", "screen-size": 6.1, "refresh-rate": 60, "battery-capacity": 3349, "camera-resolution": 48, "network-support": "5G", "bluetooth-support": true, "wi-fi-support": true, "usb-type": "USB-C", "warranty-period": 12 },
+      "options": [{ "name": "Color", "attribute": null, "values": ["Black", "Blue", "Pink"] }, { "name": "Storage Capacity", "attribute": "storage-capacity", "values": ["128", "256", "512"] }]
     },
     {
-      "name": "Dell Inspiron 15 Laptop",
-      "sku": "DELL-INS15",
-      "category": "laptops",
-      "brand": "dell",
+      "name": "Dell Inspiron 15 Laptop", "sku": "DELL-INS15", "category": "laptops", "brand": "dell",
       "description": "Dell Inspiron 15 laptop with a 15.6-inch Full HD 120 Hz display, Windows 11, backlit keyboard and fast SSD storage for work and study.",
-      "currency": "INR",
-      "attributes": {
-        "operating-system": "Windows 11",
-        "screen-size": 15.6,
-        "display-resolution": "Full HD",
-        "refresh-rate": 120,
-        "weight": 1.65,
-        "wi-fi-support": true,
-        "bluetooth-support": true,
-        "usb-type": "USB-C",
-        "warranty-period": 12
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Processor",
-          "attribute": "processor",
-          "values": [
-            "Intel Core i5",
-            "Intel Core i7"
-          ]
-        },
-        {
-          "name": "RAM",
-          "attribute": "ram",
-          "values": [
-            "8",
-            "16"
-          ]
-        },
-        {
-          "name": "Storage Capacity",
-          "attribute": "storage-capacity",
-          "values": [
-            "512",
-            "1024"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "operating-system": "Windows 11", "screen-size": 15.6, "display-resolution": "Full HD", "refresh-rate": 120, "weight": 1.65, "wi-fi-support": true, "bluetooth-support": true, "usb-type": "USB-C", "warranty-period": 12 },
+      "options": [{ "name": "Processor", "attribute": "processor", "values": ["Intel Core i5", "Intel Core i7"] }, { "name": "RAM", "attribute": "ram", "values": ["8", "16"] }, { "name": "Storage Capacity", "attribute": "storage-capacity", "values": ["512", "1024"] }]
     },
     {
-      "name": "HP Pavilion 14 Laptop",
-      "sku": "HP-PAV14",
-      "category": "laptops",
-      "brand": "hp",
+      "name": "HP Pavilion 14 Laptop", "sku": "HP-PAV14", "category": "laptops", "brand": "hp",
       "description": "HP Pavilion 14 thin and light laptop with a 14-inch Full HD display, Windows 11, fast charging and all-day battery life.",
-      "currency": "INR",
-      "attributes": {
-        "operating-system": "Windows 11",
-        "screen-size": 14,
-        "display-resolution": "Full HD",
-        "refresh-rate": 60,
-        "weight": 1.41,
-        "wi-fi-support": true,
-        "bluetooth-support": true,
-        "usb-type": "USB-C",
-        "warranty-period": 12
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Processor",
-          "attribute": "processor",
-          "values": [
-            "AMD Ryzen 5",
-            "AMD Ryzen 7",
-            "Intel Core i5"
-          ]
-        },
-        {
-          "name": "RAM",
-          "attribute": "ram",
-          "values": [
-            "8",
-            "16"
-          ]
-        },
-        {
-          "name": "Storage Capacity",
-          "attribute": "storage-capacity",
-          "values": [
-            "512",
-            "1024"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "operating-system": "Windows 11", "screen-size": 14, "display-resolution": "Full HD", "refresh-rate": 60, "weight": 1.41, "wi-fi-support": true, "bluetooth-support": true, "usb-type": "USB-C", "warranty-period": 12 },
+      "options": [{ "name": "Processor", "attribute": "processor", "values": ["AMD Ryzen 5", "AMD Ryzen 7", "Intel Core i5"] }, { "name": "RAM", "attribute": "ram", "values": ["8", "16"] }, { "name": "Storage Capacity", "attribute": "storage-capacity", "values": ["512", "1024"] }]
     },
     {
-      "name": "Levi's Cotton Crew-Neck T-Shirt",
-      "sku": "LEVI-TEE-CN",
-      "category": "mens-clothing",
-      "brand": "levis",
+      "name": "Levi's Cotton Crew-Neck T-Shirt", "sku": "LEVI-TEE-CN", "category": "mens-clothing", "brand": "levis",
       "description": "Soft 100% cotton crew-neck T-shirt for men with a regular fit, ribbed collar and a small chest logo. Machine washable.",
-      "currency": "INR",
-      "attributes": {
-        "material": "Cotton",
-        "gender": "Men",
-        "fabric-type": "Jersey",
-        "fit-type": "Regular Fit"
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Clothing Size",
-          "attribute": "clothing-size",
-          "values": [
-            "L",
-            "M",
-            "S",
-            "XL"
-          ]
-        },
-        {
-          "name": "Color",
-          "attribute": "color",
-          "values": [
-            "Black",
-            "Navy",
-            "White"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "material": "Cotton", "gender": "Men", "fabric-type": "Jersey", "fit-type": "Regular Fit" },
+      "options": [{ "name": "Clothing Size", "attribute": "clothing-size", "values": ["L", "M", "S", "XL"] }, { "name": "Color", "attribute": "color", "values": ["Black", "Navy", "White"] }]
     },
     {
-      "name": "Nike Revolution 7 Running Shoes",
-      "sku": "NIKE-REV7",
-      "category": "footwear",
-      "brand": "nike",
+      "name": "Nike Revolution 7 Running Shoes", "sku": "NIKE-REV7", "category": "footwear", "brand": "nike",
       "description": "Lightweight Nike Revolution 7 running shoes with breathable mesh upper, soft foam cushioning and a durable rubber outsole.",
-      "currency": "INR",
-      "attributes": {
-        "shoe-size": "UK 9",
-        "gender": "Men",
-        "material": "Mesh",
-        "color": "Black"
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Color",
-          "attribute": "color",
-          "values": [
-            "Black",
-            "Blue",
-            "Grey"
-          ]
-        },
-        {
-          "name": "Shoe Size",
-          "attribute": "shoe-size",
-          "values": [
-            "UK 10",
-            "UK 7",
-            "UK 8",
-            "UK 9"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "shoe-size": "UK 9", "gender": "Men", "material": "Mesh", "color": "Black" },
+      "options": [{ "name": "Color", "attribute": "color", "values": ["Black", "Blue", "Grey"] }, { "name": "Shoe Size", "attribute": "shoe-size", "values": ["UK 10", "UK 7", "UK 8", "UK 9"] }]
     },
     {
-      "name": "boAt Wave Smartwatch",
-      "sku": "BOAT-WAVE-SW",
-      "category": "watches",
-      "brand": "boat",
+      "name": "boAt Wave Smartwatch", "sku": "BOAT-WAVE-SW", "category": "watches", "brand": "boat",
       "description": "boAt Wave smartwatch with a 1.83-inch display, heart-rate and SpO2 monitoring, Bluetooth calling and up to 7 days of battery life.",
-      "currency": "INR",
-      "attributes": {
-        "water-resistance": true,
-        "material": "Silicone",
-        "gender": "Unisex"
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Color",
-          "attribute": "color",
-          "values": [
-            "Black",
-            "Blue"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "water-resistance": true, "material": "Silicone", "gender": "Unisex" },
+      "options": [{ "name": "Color", "attribute": "color", "values": ["Black", "Blue"] }]
     },
     {
-      "name": "Sony WH-1000XM5 Wireless Headphones",
-      "sku": "SONY-WH1000XM5",
-      "category": "electronics",
-      "brand": "sony",
+      "name": "Sony WH-1000XM5 Wireless Headphones", "sku": "SONY-WH1000XM5", "category": "electronics", "brand": "sony",
       "description": "Sony WH-1000XM5 over-ear wireless headphones with industry-leading noise cancellation, 30-hour battery life and USB-C fast charging.",
-      "currency": "INR",
-      "attributes": {
-        "bluetooth-support": true,
-        "usb-type": "USB-C",
-        "warranty-period": 12
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Color",
-          "attribute": null,
-          "values": [
-            "Black",
-            "Silver"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "bluetooth-support": true, "usb-type": "USB-C", "warranty-period": 12 },
+      "options": [{ "name": "Color", "attribute": null, "values": ["Black", "Silver"] }]
     },
     {
-      "name": "Decathlon Insulated Water Bottle",
-      "sku": "DECA-BTL",
-      "category": "fitness-accessories",
-      "brand": "decathlon",
+      "name": "Decathlon Insulated Water Bottle", "sku": "DECA-BTL", "category": "fitness-accessories", "brand": "decathlon",
       "description": "Double-wall insulated stainless steel water bottle that keeps drinks cold for 24 hours. Leak-proof lid for the gym, hiking and travel.",
-      "currency": "INR",
-      "attributes": {
-        "material_note": "stainless steel",
-        "leak_proof": true
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Capacity Ml",
-          "attribute": null,
-          "values": [
-            "750",
-            "1000"
-          ]
-        },
-        {
-          "name": "Color",
-          "attribute": null,
-          "values": [
-            "Black",
-            "Blue"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "material_note": "stainless steel", "leak_proof": true },
+      "options": [{ "name": "Capacity Ml", "attribute": null, "values": ["750", "1000"] }, { "name": "Color", "attribute": null, "values": ["Black", "Blue"] }]
     },
     {
-      "name": "Puma Phase Backpack",
-      "sku": "PUMA-PHASE-BP",
-      "category": "bags-and-luggage",
-      "brand": "puma",
+      "name": "Puma Phase Backpack", "sku": "PUMA-PHASE-BP", "category": "bags-and-luggage", "brand": "puma",
       "description": "Puma Phase everyday backpack with a padded laptop sleeve, front zip pocket and adjustable shoulder straps.",
-      "currency": "INR",
-      "attributes": {
-        "material": "Polyester",
-        "gender": "Unisex"
-      },
-      "hasVariants": true,
-      "options": [
-        {
-          "name": "Capacity Litres",
-          "attribute": null,
-          "values": [
-            "22"
-          ]
-        },
-        {
-          "name": "Color",
-          "attribute": "color",
-          "values": [
-            "Black",
-            "Grey"
-          ]
-        }
-      ]
+      "currency": "INR", "hasVariants": true,
+      "attributes": { "material": "Polyester", "gender": "Unisex" },
+      "options": [{ "name": "Capacity Litres", "attribute": null, "values": ["22"] }, { "name": "Color", "attribute": "color", "values": ["Black", "Grey"] }]
     }
   ],
   "variants": [
-    {
-      "product": "SAM-GS24",
-      "sku": "SAM-GS24-128-BLK",
-      "options": {
-        "Storage Capacity": "128",
-        "Color": "Onyx Black"
-      },
-      "price": 69999,
-      "compareAtPrice": 74999,
-      "stockQuantity": 25,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "SAM-GS24",
-      "sku": "SAM-GS24-256-BLK",
-      "options": {
-        "Storage Capacity": "256",
-        "Color": "Onyx Black"
-      },
-      "price": 79999,
-      "compareAtPrice": null,
-      "stockQuantity": 12,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "SAM-GS24",
-      "sku": "SAM-GS24-256-GRY",
-      "options": {
-        "Storage Capacity": "256",
-        "Color": "Marble Grey"
-      },
-      "price": 76999,
-      "compareAtPrice": 79999,
-      "stockQuantity": 4,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "SAM-GS24",
-      "sku": "SAM-GS24-512-VIO",
-      "options": {
-        "Storage Capacity": "512",
-        "Color": "Cobalt Violet"
-      },
-      "price": 89999,
-      "compareAtPrice": null,
-      "stockQuantity": 0,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "APL-IP15",
-      "sku": "APL-IP15-128-BLK",
-      "options": {
-        "Storage Capacity": "128",
-        "Color": "Black"
-      },
-      "price": 72999,
-      "compareAtPrice": 79900,
-      "stockQuantity": 30,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "APL-IP15",
-      "sku": "APL-IP15-128-BLU",
-      "options": {
-        "Storage Capacity": "128",
-        "Color": "Blue"
-      },
-      "price": 79900,
-      "compareAtPrice": null,
-      "stockQuantity": 3,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "APL-IP15",
-      "sku": "APL-IP15-256-PNK",
-      "options": {
-        "Storage Capacity": "256",
-        "Color": "Pink"
-      },
-      "price": 89900,
-      "compareAtPrice": null,
-      "stockQuantity": 15,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "APL-IP15",
-      "sku": "APL-IP15-512-BLK",
-      "options": {
-        "Storage Capacity": "512",
-        "Color": "Black"
-      },
-      "price": 109900,
-      "compareAtPrice": null,
-      "stockQuantity": 0,
-      "status": "INACTIVE"
-    },
-    {
-      "product": "DELL-INS15",
-      "sku": "DELL-INS15-I5-16-512",
-      "options": {
-        "Processor": "Intel Core i5",
-        "RAM": "16",
-        "Storage Capacity": "512"
-      },
-      "price": 59990,
-      "compareAtPrice": 62990,
-      "stockQuantity": 8,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "DELL-INS15",
-      "sku": "DELL-INS15-I7-16-1TB",
-      "options": {
-        "Processor": "Intel Core i7",
-        "RAM": "16",
-        "Storage Capacity": "1024"
-      },
-      "price": 78990,
-      "compareAtPrice": null,
-      "stockQuantity": 5,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "DELL-INS15",
-      "sku": "DELL-INS15-I5-8-512",
-      "options": {
-        "Processor": "Intel Core i5",
-        "RAM": "8",
-        "Storage Capacity": "512"
-      },
-      "price": 55990,
-      "compareAtPrice": null,
-      "stockQuantity": 6,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "HP-PAV14",
-      "sku": "HP-PAV14-R5-16-512",
-      "options": {
-        "Processor": "AMD Ryzen 5",
-        "RAM": "16",
-        "Storage Capacity": "512"
-      },
-      "price": 54999,
-      "compareAtPrice": 58999,
-      "stockQuantity": 9,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "HP-PAV14",
-      "sku": "HP-PAV14-R7-16-1TB",
-      "options": {
-        "Processor": "AMD Ryzen 7",
-        "RAM": "16",
-        "Storage Capacity": "1024"
-      },
-      "price": 71999,
-      "compareAtPrice": null,
-      "stockQuantity": 2,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "HP-PAV14",
-      "sku": "HP-PAV14-I5-8-512",
-      "options": {
-        "Processor": "Intel Core i5",
-        "RAM": "8",
-        "Storage Capacity": "512"
-      },
-      "price": 52999,
-      "compareAtPrice": null,
-      "stockQuantity": 6,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "LEVI-TEE-CN",
-      "sku": "LEVI-TEE-CN-S-WHT",
-      "options": {
-        "Clothing Size": "S",
-        "Color": "White"
-      },
-      "price": 999,
-      "compareAtPrice": 1299,
-      "stockQuantity": 40,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "LEVI-TEE-CN",
-      "sku": "LEVI-TEE-CN-M-WHT",
-      "options": {
-        "Clothing Size": "M",
-        "Color": "White"
-      },
-      "price": 1299,
-      "compareAtPrice": null,
-      "stockQuantity": 35,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "LEVI-TEE-CN",
-      "sku": "LEVI-TEE-CN-L-BLK",
-      "options": {
-        "Clothing Size": "L",
-        "Color": "Black"
-      },
-      "price": 1299,
-      "compareAtPrice": null,
-      "stockQuantity": 30,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "LEVI-TEE-CN",
-      "sku": "LEVI-TEE-CN-XL-NVY",
-      "options": {
-        "Clothing Size": "XL",
-        "Color": "Navy"
-      },
-      "price": 1399,
-      "compareAtPrice": null,
-      "stockQuantity": 0,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "NIKE-REV7",
-      "sku": "NIKE-REV7-UK7-BLK",
-      "options": {
-        "Shoe Size": "UK 7",
-        "Color": "Black"
-      },
-      "price": 3695,
-      "compareAtPrice": null,
-      "stockQuantity": 14,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "NIKE-REV7",
-      "sku": "NIKE-REV7-UK8-BLK",
-      "options": {
-        "Shoe Size": "UK 8",
-        "Color": "Black"
-      },
-      "price": 3295,
-      "compareAtPrice": 3695,
-      "stockQuantity": 18,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "NIKE-REV7",
-      "sku": "NIKE-REV7-UK9-BLU",
-      "options": {
-        "Shoe Size": "UK 9",
-        "Color": "Blue"
-      },
-      "price": 3695,
-      "compareAtPrice": null,
-      "stockQuantity": 5,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "NIKE-REV7",
-      "sku": "NIKE-REV7-UK10-GRY",
-      "options": {
-        "Shoe Size": "UK 10",
-        "Color": "Grey"
-      },
-      "price": 3695,
-      "compareAtPrice": null,
-      "stockQuantity": 15,
-      "status": "INACTIVE"
-    },
-    {
-      "product": "BOAT-WAVE-SW",
-      "sku": "BOAT-WAVE-SW-BLK",
-      "options": {
-        "Color": "Black"
-      },
-      "price": 1999,
-      "compareAtPrice": 2499,
-      "stockQuantity": 21,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "BOAT-WAVE-SW",
-      "sku": "BOAT-WAVE-SW-BLU",
-      "options": {
-        "Color": "Blue"
-      },
-      "price": 2499,
-      "compareAtPrice": null,
-      "stockQuantity": 12,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "SONY-WH1000XM5",
-      "sku": "SONY-WH1000XM5-BLK",
-      "options": {
-        "Color": "Black"
-      },
-      "price": 26990,
-      "compareAtPrice": 29990,
-      "stockQuantity": 9,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "SONY-WH1000XM5",
-      "sku": "SONY-WH1000XM5-SLV",
-      "options": {
-        "Color": "Silver"
-      },
-      "price": 29990,
-      "compareAtPrice": null,
-      "stockQuantity": 5,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "DECA-BTL",
-      "sku": "DECA-BTL-750-BLU",
-      "options": {
-        "Capacity Ml": "750",
-        "Color": "Blue"
-      },
-      "price": 899,
-      "compareAtPrice": null,
-      "stockQuantity": 50,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "DECA-BTL",
-      "sku": "DECA-BTL-1000-BLK",
-      "options": {
-        "Capacity Ml": "1000",
-        "Color": "Black"
-      },
-      "price": 949,
-      "compareAtPrice": 1099,
-      "stockQuantity": 35,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "PUMA-PHASE-BP",
-      "sku": "PUMA-PHASE-BP-BLK",
-      "options": {
-        "Color": "Black",
-        "Capacity Litres": "22"
-      },
-      "price": 1499,
-      "compareAtPrice": 1799,
-      "stockQuantity": 40,
-      "status": "ACTIVE"
-    },
-    {
-      "product": "PUMA-PHASE-BP",
-      "sku": "PUMA-PHASE-BP-GRY",
-      "options": {
-        "Color": "Grey",
-        "Capacity Litres": "22"
-      },
-      "price": 1799,
-      "compareAtPrice": null,
-      "stockQuantity": 24,
-      "status": "ACTIVE"
-    }
+    { "product": "SAM-GS24", "sku": "SAM-GS24-128-BLK", "options": { "Storage Capacity": "128", "Color": "Onyx Black" }, "price": 69999.00, "compareAtPrice": 74999.00, "stockQuantity": 25, "status": "ACTIVE" },
+    { "product": "SAM-GS24", "sku": "SAM-GS24-256-BLK", "options": { "Storage Capacity": "256", "Color": "Onyx Black" }, "price": 79999.00, "compareAtPrice": null, "stockQuantity": 12, "status": "ACTIVE" },
+    { "product": "SAM-GS24", "sku": "SAM-GS24-256-GRY", "options": { "Storage Capacity": "256", "Color": "Marble Grey" }, "price": 76999.00, "compareAtPrice": 79999.00, "stockQuantity": 4, "status": "ACTIVE" },
+    { "product": "SAM-GS24", "sku": "SAM-GS24-512-VIO", "options": { "Storage Capacity": "512", "Color": "Cobalt Violet" }, "price": 89999.00, "compareAtPrice": null, "stockQuantity": 0, "status": "ACTIVE" },
+    { "product": "APL-IP15", "sku": "APL-IP15-128-BLK", "options": { "Storage Capacity": "128", "Color": "Black" }, "price": 72999.00, "compareAtPrice": 79900.00, "stockQuantity": 30, "status": "ACTIVE" },
+    { "product": "APL-IP15", "sku": "APL-IP15-128-BLU", "options": { "Storage Capacity": "128", "Color": "Blue" }, "price": 79900.00, "compareAtPrice": null, "stockQuantity": 3, "status": "ACTIVE" },
+    { "product": "APL-IP15", "sku": "APL-IP15-256-PNK", "options": { "Storage Capacity": "256", "Color": "Pink" }, "price": 89900.00, "compareAtPrice": null, "stockQuantity": 15, "status": "ACTIVE" },
+    { "product": "APL-IP15", "sku": "APL-IP15-512-BLK", "options": { "Storage Capacity": "512", "Color": "Black" }, "price": 109900.00, "compareAtPrice": null, "stockQuantity": 0, "status": "INACTIVE" },
+    { "product": "DELL-INS15", "sku": "DELL-INS15-I5-16-512", "options": { "Processor": "Intel Core i5", "RAM": "16", "Storage Capacity": "512" }, "price": 59990.00, "compareAtPrice": 62990.00, "stockQuantity": 8, "status": "ACTIVE" },
+    { "product": "DELL-INS15", "sku": "DELL-INS15-I7-16-1TB", "options": { "Processor": "Intel Core i7", "RAM": "16", "Storage Capacity": "1024" }, "price": 78990.00, "compareAtPrice": null, "stockQuantity": 5, "status": "ACTIVE" },
+    { "product": "DELL-INS15", "sku": "DELL-INS15-I5-8-512", "options": { "Processor": "Intel Core i5", "RAM": "8", "Storage Capacity": "512" }, "price": 55990.00, "compareAtPrice": null, "stockQuantity": 6, "status": "ACTIVE" },
+    { "product": "HP-PAV14", "sku": "HP-PAV14-R5-16-512", "options": { "Processor": "AMD Ryzen 5", "RAM": "16", "Storage Capacity": "512" }, "price": 54999.00, "compareAtPrice": 58999.00, "stockQuantity": 9, "status": "ACTIVE" },
+    { "product": "HP-PAV14", "sku": "HP-PAV14-R7-16-1TB", "options": { "Processor": "AMD Ryzen 7", "RAM": "16", "Storage Capacity": "1024" }, "price": 71999.00, "compareAtPrice": null, "stockQuantity": 2, "status": "ACTIVE" },
+    { "product": "HP-PAV14", "sku": "HP-PAV14-I5-8-512", "options": { "Processor": "Intel Core i5", "RAM": "8", "Storage Capacity": "512" }, "price": 52999.00, "compareAtPrice": null, "stockQuantity": 6, "status": "ACTIVE" },
+    { "product": "LEVI-TEE-CN", "sku": "LEVI-TEE-CN-S-WHT", "options": { "Clothing Size": "S", "Color": "White" }, "price": 999.00, "compareAtPrice": 1299.00, "stockQuantity": 40, "status": "ACTIVE" },
+    { "product": "LEVI-TEE-CN", "sku": "LEVI-TEE-CN-M-WHT", "options": { "Clothing Size": "M", "Color": "White" }, "price": 1299.00, "compareAtPrice": null, "stockQuantity": 35, "status": "ACTIVE" },
+    { "product": "LEVI-TEE-CN", "sku": "LEVI-TEE-CN-L-BLK", "options": { "Clothing Size": "L", "Color": "Black" }, "price": 1299.00, "compareAtPrice": null, "stockQuantity": 30, "status": "ACTIVE" },
+    { "product": "LEVI-TEE-CN", "sku": "LEVI-TEE-CN-XL-NVY", "options": { "Clothing Size": "XL", "Color": "Navy" }, "price": 1399.00, "compareAtPrice": null, "stockQuantity": 0, "status": "ACTIVE" },
+    { "product": "NIKE-REV7", "sku": "NIKE-REV7-UK7-BLK", "options": { "Shoe Size": "UK 7", "Color": "Black" }, "price": 3695.00, "compareAtPrice": null, "stockQuantity": 14, "status": "ACTIVE" },
+    { "product": "NIKE-REV7", "sku": "NIKE-REV7-UK8-BLK", "options": { "Shoe Size": "UK 8", "Color": "Black" }, "price": 3295.00, "compareAtPrice": 3695.00, "stockQuantity": 18, "status": "ACTIVE" },
+    { "product": "NIKE-REV7", "sku": "NIKE-REV7-UK9-BLU", "options": { "Shoe Size": "UK 9", "Color": "Blue" }, "price": 3695.00, "compareAtPrice": null, "stockQuantity": 5, "status": "ACTIVE" },
+    { "product": "NIKE-REV7", "sku": "NIKE-REV7-UK10-GRY", "options": { "Shoe Size": "UK 10", "Color": "Grey" }, "price": 3695.00, "compareAtPrice": null, "stockQuantity": 15, "status": "INACTIVE" },
+    { "product": "BOAT-WAVE-SW", "sku": "BOAT-WAVE-SW-BLK", "options": { "Color": "Black" }, "price": 1999.00, "compareAtPrice": 2499.00, "stockQuantity": 21, "status": "ACTIVE" },
+    { "product": "BOAT-WAVE-SW", "sku": "BOAT-WAVE-SW-BLU", "options": { "Color": "Blue" }, "price": 2499.00, "compareAtPrice": null, "stockQuantity": 12, "status": "ACTIVE" },
+    { "product": "SONY-WH1000XM5", "sku": "SONY-WH1000XM5-BLK", "options": { "Color": "Black" }, "price": 26990.00, "compareAtPrice": 29990.00, "stockQuantity": 9, "status": "ACTIVE" },
+    { "product": "SONY-WH1000XM5", "sku": "SONY-WH1000XM5-SLV", "options": { "Color": "Silver" }, "price": 29990.00, "compareAtPrice": null, "stockQuantity": 5, "status": "ACTIVE" },
+    { "product": "DECA-BTL", "sku": "DECA-BTL-750-BLU", "options": { "Capacity Ml": "750", "Color": "Blue" }, "price": 899.00, "compareAtPrice": null, "stockQuantity": 50, "status": "ACTIVE" },
+    { "product": "DECA-BTL", "sku": "DECA-BTL-1000-BLK", "options": { "Capacity Ml": "1000", "Color": "Black" }, "price": 949.00, "compareAtPrice": 1099.00, "stockQuantity": 35, "status": "ACTIVE" },
+    { "product": "PUMA-PHASE-BP", "sku": "PUMA-PHASE-BP-BLK", "options": { "Color": "Black", "Capacity Litres": "22" }, "price": 1499.00, "compareAtPrice": 1799.00, "stockQuantity": 40, "status": "ACTIVE" },
+    { "product": "PUMA-PHASE-BP", "sku": "PUMA-PHASE-BP-GRY", "options": { "Color": "Grey", "Capacity Litres": "22" }, "price": 1799.00, "compareAtPrice": null, "stockQuantity": 24, "status": "ACTIVE" }
   ]
 }

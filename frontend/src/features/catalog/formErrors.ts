@@ -8,6 +8,8 @@ interface ServerErrorMapping<T extends FieldValues> {
   conflicts?: Record<string, Path<T>>
   /** Form field for a violation on "attributes.<slug>", when that slug has a typed input. */
   specField?: (slug: string) => Path<T> | null
+  /** Form field for a violation inside a list, e.g. "variants[2].sku"; checked before `fields`. */
+  rowField?: (field: string) => Path<T> | null
 }
 
 /**
@@ -30,7 +32,7 @@ export function applyServerErrors<T extends FieldValues>(
     const specPath = violation.field.startsWith('attributes.')
       ? mapping.specField?.(violation.field.slice('attributes.'.length))
       : null
-    const path = specPath ?? mapping.fields[violation.field.split(/[.[]/)[0]]
+    const path = specPath ?? mapping.rowField?.(violation.field) ?? mapping.fields[violation.field.split(/[.[]/)[0]]
     if (path) {
       setError(path, { message: violation.message })
       mapped = true

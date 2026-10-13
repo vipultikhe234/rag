@@ -36,6 +36,7 @@ export function AttributeListPage() {
   const categoryId = params.get('categoryId') ?? ''
   const dataType = (params.get('dataType') ?? '') as AttributeDataType | ''
   const filterable = params.get('filterable') ?? ''
+  const required = params.get('required') ?? ''
   const sort = params.get('sort') ?? 'name,asc'
   const [searchInput, setSearchInput] = useDebouncedSearch(q, updateParams)
 
@@ -49,21 +50,22 @@ export function AttributeListPage() {
           categoryId,
           dataType,
           filterable: filterable === '' ? undefined : filterable === 'true',
+          required: required === '' ? undefined : required === 'true',
           page,
           size: PAGE_SIZE,
           sort,
         },
         signal,
       ),
-    JSON.stringify([q, status, categoryId, dataType, filterable, sort, page]),
+    JSON.stringify([q, status, categoryId, dataType, filterable, required, sort, page]),
   )
-  const filtersActive = Boolean(q || status || categoryId || dataType || filterable)
+  const filtersActive = Boolean(q || status || categoryId || dataType || filterable || required)
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title="Product attributes"
-        description="Typed specifications such as RAM or size. An attribute applies to products in its category and all subcategories."
+        description="Typed specifications such as RAM or size. An attribute applies to products in its categories and all their subcategories."
         actions={
           isAdmin && (
             <Link to="/product-attributes/new" className={linkClass.primary}>
@@ -75,7 +77,7 @@ export function AttributeListPage() {
 
       <Card>
         <form
-          className="grid gap-4 md:grid-cols-3 xl:grid-cols-[2fr_1.5fr_1fr_1fr_1fr_1fr]"
+          className="grid gap-4 md:grid-cols-3 xl:grid-cols-[2fr_1.5fr_1fr_1fr_1fr_1fr_1fr]"
           role="search"
           aria-label="Filter attributes"
           onSubmit={(event) => {
@@ -120,6 +122,15 @@ export function AttributeListPage() {
             <option value="true">Filterable</option>
             <option value="false">Not filterable</option>
           </SelectField>
+          <SelectField
+            label="Required"
+            value={required}
+            onChange={(event) => updateParams({ required: event.target.value })}
+          >
+            <option value="">Any</option>
+            <option value="true">Required</option>
+            <option value="false">Optional</option>
+          </SelectField>
           <SelectField label="Status" value={status} onChange={(event) => updateParams({ status: event.target.value })}>
             <option value="">All statuses</option>
             <option value="ACTIVE">Active</option>
@@ -144,7 +155,7 @@ export function AttributeListPage() {
             filtersActive={filtersActive}
             onClearFilters={() => {
               setSearchInput('')
-              updateParams({ q: null, status: null, categoryId: null, dataType: null, filterable: null })
+              updateParams({ q: null, status: null, categoryId: null, dataType: null, filterable: null, required: null })
             }}
             emptyDescription={
               isAdmin ? 'Add an attribute to describe products in a category.' : 'No attributes have been created yet.'
@@ -157,7 +168,7 @@ export function AttributeListPage() {
                   <thead className={table.head}>
                     <tr>
                       <th scope="col" className={table.th}>Attribute</th>
-                      <th scope="col" className={table.th}>Category</th>
+                      <th scope="col" className={table.th}>Categories</th>
                       <th scope="col" className={table.th}>Type</th>
                       <th scope="col" className={table.th}>Options</th>
                       <th scope="col" className={table.th}>Flags</th>
@@ -178,10 +189,15 @@ export function AttributeListPage() {
                           </Link>
                           <div className="font-mono text-xs text-slate-500">{attribute.slug}</div>
                         </td>
-                        <td className={table.td}>
-                          <Link to={`/categories/${attribute.categoryId}`} className="text-slate-700 hover:underline">
-                            {attribute.categoryName}
-                          </Link>
+                        <td className={`${table.td} max-w-xs`}>
+                          {attribute.categories.map((category, index) => (
+                            <span key={category.id}>
+                              {index > 0 && ', '}
+                              <Link to={`/categories/${category.id}`} className="text-slate-700 hover:underline">
+                                {category.name}
+                              </Link>
+                            </span>
+                          ))}
                         </td>
                         <td className={`${table.td} whitespace-nowrap`}>
                           {humanize(attribute.dataType)}

@@ -1,10 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useMemo, useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { z } from 'zod'
 import { attributeApi, categoryApi } from '../../api/endpoints'
-import type { ProductAttribute } from '../../api/types'
+import type { CategoryOption, ProductAttribute } from '../../api/types'
 import { useToast } from '../../components/toast/toastContext'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -24,7 +24,10 @@ const splitOptions = (text: string) =>
 
 const schema = z
   .object({
-    categoryId: z.string().min(1, 'Category is required'),
+    categoryIds: z
+      .array(z.string())
+      .min(1, 'Choose at least one category')
+      .max(20, 'An attribute can be assigned to at most 20 categories'),
     name: z.string().trim().min(1, 'Name is required').max(100, 'At most 100 characters'),
     slug: slugField(64),
     dataType: z.enum(['STRING', 'NUMBER', 'BOOLEAN', 'SELECT']),
@@ -53,7 +56,7 @@ type FormValues = z.infer<typeof schema>
 
 function toForm(attribute: ProductAttribute): FormValues {
   return {
-    categoryId: attribute.categoryId,
+    categoryIds: attribute.categories.map((category) => category.id),
     name: attribute.name,
     slug: attribute.slug,
     dataType: attribute.dataType,
@@ -77,6 +80,61 @@ function Checkbox({ label, hint, ...rest }: { label: string; hint: string } & Re
   )
 }
 
+interface CategoryChecklistProps {
+  choices: CategoryOption[]
+  value: string[]
+  onChange: (next: string[]) => void
+  onBlur: () => void
+  error?: string
+  hint: string
+}
+
+/** Searchable checkbox list; selected categories are listed first so they stay visible. */
+function CategoryChecklist({ choices, value, onChange, onBlur, error, hint }: CategoryChecklistProps) {
+  const [filter, setFilter] = useState('')
+  const selected = new Set(value)
+  const needle = filter.trim().toLowerCase()
+  const visible = choices
+    .filter((option) => !needle || option.path.toLowerCase().includes(needle) || selected.has(option.id))
+    .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)) || a.path.localeCompare(b.path))
+  const toggle = (id: string) => onChange(selected.has(id) ? value.filter((v) => v !== id) : [...value, id])
+
+  return (
+    <fieldset className="space-y-2 sm:col-span-2" aria-invalid={error ? true : undefined}>
+      <legend className="text-sm font-medium text-slate-700">
+        Categories <span className="text-red-600">*</span>
+        <span className="ml-2 text-xs font-normal text-slate-500">{value.length} selected</span>
+      </legend>
+      <input
+        type="search"
+        value={filter}
+        onChange={(event) => setFilter(event.target.value)}
+        placeholder="Filter categories"
+        aria-label="Filter categories"
+        className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+      />
+      <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 p-2" onBlur={onBlur}>
+        {visible.length === 0 && <p className="px-1 py-2 text-sm text-slate-500">No categories match.</p>}
+        {visible.map((option) => (
+          <label key={option.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+              checked={selected.has(option.id)}
+              onChange={() => toggle(option.id)}
+            />
+            <span>
+              {option.path}
+              {option.status === 'INACTIVE' && <span className="text-slate-500"> (inactive)</span>}
+            </span>
+          </label>
+        ))}
+      </div>
+      {error ? <p className="text-xs text-red-600">{error}</p> : <p className="text-xs text-slate-500">{hint}</p>}
+    </fieldset>
+  )
+}
+
 export function AttributeFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -97,7 +155,7 @@ export function AttributeFormPage({ mode }: { mode: 'create' | 'edit' }) {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      categoryId: searchParams.get('categoryId') ?? '',
+      categoryIds: searchParams.get('categoryId') ? [searchParams.get('categoryId')!] : [],
       name: '',
       slug: '',
       dataType: 'STRING',
@@ -115,15 +173,16 @@ export function AttributeFormPage({ mode }: { mode: 'create' | 'edit' }) {
     if (record.data) reset(toForm(record.data))
   }, [record.data, reset])
 
-  const categoryChoices = useMemo(
-    () => (categories.data ?? []).filter((o) => o.status === 'ACTIVE' || o.id === record.data?.categoryId),
-    [categories.data, record.data],
-  )
+  // Inactive categories cannot be newly assigned; ones the attribute already has stay selectable so they can be kept.
+  const categoryChoices = useMemo(() => {
+    const assigned = new Set(record.data?.categories.map((category) => category.id) ?? [])
+    return (categories.data ?? []).filter((o) => o.status === 'ACTIVE' || assigned.has(o.id))
+  }, [categories.data, record.data])
 
   const onSubmit = async (values: FormValues) => {
     setServerError(null)
     const payload = {
-      categoryId: values.categoryId,
+      categoryIds: values.categoryIds,
       name: values.name.trim(),
       slug: nullIfBlank(values.slug),
       dataType: values.dataType,
@@ -142,7 +201,8 @@ export function AttributeFormPage({ mode }: { mode: 'create' | 'edit' }) {
       setServerError(
         applyServerErrors(err, setError, {
           fields: {
-            categoryId: 'categoryId',
+            categoryIds: 'categoryIds',
+            categoryId: 'categoryIds',
             name: 'name',
             slug: 'slug',
             dataType: 'dataType',
@@ -150,6 +210,7 @@ export function AttributeFormPage({ mode }: { mode: 'create' | 'edit' }) {
             unit: 'unit',
             status: 'status',
           },
+          conflicts: { ATTRIBUTE_ALREADY_EXISTS: 'name', SLUG_ALREADY_EXISTS: 'slug' },
         }),
       )
     }
@@ -185,25 +246,24 @@ export function AttributeFormPage({ mode }: { mode: 'create' | 'edit' }) {
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <Card title="Definition">
           <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField
-              label="Category"
-              required
-              hint={
-                categories.error
-                  ? 'Categories could not be loaded.'
-                  : 'The attribute also applies to every subcategory.'
-              }
-              error={errors.categoryId?.message}
-              {...register('categoryId')}
-            >
-              <option value="">Select a category</option>
-              {categoryChoices.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.path}
-                  {option.status === 'INACTIVE' ? ' (inactive)' : ''}
-                </option>
-              ))}
-            </SelectField>
+            <Controller
+              control={control}
+              name="categoryIds"
+              render={({ field }) => (
+                <CategoryChecklist
+                  choices={categoryChoices}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  error={errors.categoryIds?.message ?? errors.categoryIds?.root?.message}
+                  hint={
+                    categories.error
+                      ? 'Categories could not be loaded.'
+                      : 'The attribute also applies to every subcategory of the chosen categories.'
+                  }
+                />
+              )}
+            />
             <SelectField label="Status" error={errors.status?.message} {...register('status')}>
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
@@ -243,7 +303,7 @@ export function AttributeFormPage({ mode }: { mode: 'create' | 'edit' }) {
             )}
             <Checkbox
               label="Required"
-              hint="Products in this category must have a value."
+              hint="Products in these categories must have a value."
               {...register('required')}
             />
             <Checkbox

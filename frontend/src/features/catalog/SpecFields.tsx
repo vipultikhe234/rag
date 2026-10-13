@@ -11,22 +11,40 @@ interface SpecFieldsProps {
   errorFor: (slug: string) => string | undefined
   enforceRequired: boolean
   ownCategoryId: string
+  /** Ancestors of the product's category, used to name the category an attribute is inherited from. */
+  ancestorIds?: string[]
 }
 
 function label(definition: ProductAttribute): string {
   return definition.unit ? `${definition.name} (${definition.unit})` : definition.name
 }
 
+function inheritedFrom(definition: ProductAttribute, ownCategoryId: string, ancestorIds: string[]): string | undefined {
+  if (definition.categories.some((category) => category.id === ownCategoryId)) {
+    return undefined
+  }
+  const sources = definition.categories.filter((category) => ancestorIds.includes(category.id))
+  const names = (sources.length > 0 ? sources : definition.categories).map((category) => category.name)
+  return names.length > 0 ? `Inherited from ${names.join(', ')}` : undefined
+}
+
 /** Typed inputs for the attribute definitions that apply to a category (including inherited ones). */
-export function SpecFields({ definitions, original, registerSpec, errorFor, enforceRequired, ownCategoryId }: SpecFieldsProps) {
+export function SpecFields({
+  definitions,
+  original,
+  registerSpec,
+  errorFor,
+  enforceRequired,
+  ownCategoryId,
+  ancestorIds = [],
+}: SpecFieldsProps) {
   if (definitions.length === 0) {
     return <p className="text-sm text-slate-500">No attributes are defined for this category.</p>
   }
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {definitions.map((definition) => {
-        const inherited = definition.categoryId !== ownCategoryId && definition.categoryName
-        const hint = inherited ? `Inherited from ${definition.categoryName}` : undefined
+        const hint = inheritedFrom(definition, ownCategoryId, ancestorIds)
         if (definition.status !== 'ACTIVE') {
           return (
             <div key={definition.id} className="space-y-1">

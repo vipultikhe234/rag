@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Seeds the catalog fixtures in scripts/catalog-fixtures.json (30 categories, 30 brands, 30 attributes, 10
 // prerequisite products and 30 variants) through the public REST API, so every record goes through the same
-// validation as the admin UI. Product creation also queues the normal embedding sync; catalog records are not
-// embedded.
+// validation as the admin UI. Each prerequisite product is created together with its options and variants in one
+// request (one transaction). Product creation also queues the normal embedding sync; catalog records, options and
+// variants are not embedded.
 //
 // Usage (backend must be running against a development database):
 //   node scripts/seed-catalog.mjs          asks for confirmation
@@ -11,10 +12,10 @@
 // ADMIN_EMAIL / ADMIN_PASSWORD are read from the environment, then from the project-root .env file, and are
 // prompted for if still missing. API_BASE_URL defaults to http://localhost:8080/api/v1.
 //
-// Safety: only localhost targets are accepted. The script is idempotent: categories and brands are matched by slug
-// (or name), attributes by category + slug, products and variants by SKU. Existing records are reused as they
-// are; nothing is updated or deleted. The run ends with a verification of every fixture and exits non-zero when
-// anything is missing or failed.
+// Safety: only localhost targets are accepted. The script is idempotent: categories, brands and attributes are
+// matched by slug (or name), products and variants by SKU. Existing records are reused as they are; nothing is
+// updated or deleted (variants missing from an existing product are added to it). The run ends with a verification
+// of every fixture and exits non-zero when anything is missing or failed.
 
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -186,35 +187,25 @@ async function seedBrands(fixtures, stats) {
   return ids
 }
 
-async function existingAttributes(categoryIds, fixtures) {
-  const byCategory = new Map()
-  for (const slug of new Set(fixtures.map((a) => a.category))) {
-    const id = categoryIds.get(slug)
-    if (id) {
-      byCategory.set(id, await getAllPages(`/product-attributes?categoryId=${id}`))
-    }
-  }
-  return byCategory
-}
-
+/** Attributes are global (unique slug and name), so one listing covers every category. */
 async function seedAttributes(fixtures, categoryIds, stats) {
-  const byCategory = await existingAttributes(categoryIds, fixtures)
+  const existing = await getAllPages('/product-attributes')
+  const ids = new Map()
   for (const attribute of fixtures) {
-    const categoryId = categoryIds.get(attribute.category)
-    if (!categoryId) {
-      fail(`attribute ${attribute.slug}`, `category ${attribute.category} is missing`)
+    const found = existing.find((a) => a.slug === attribute.slug || lower(a.name) === lower(attribute.name))
+    if (found) {
+      ids.set(attribute.slug, found.id)
+      stats.reused++
+      console.log(`reused   attribute ${attribute.slug}`)
       continue
     }
-    const found = (byCategory.get(categoryId) ?? []).find(
-      (a) => a.slug === attribute.slug || lower(a.name) === lower(attribute.name),
-    )
-    if (found) {
-      stats.reused++
-      console.log(`reused   attribute ${attribute.category}/${attribute.slug}`)
+    const missing = attribute.categories.filter((slug) => !categoryIds.get(slug))
+    if (missing.length > 0) {
+      fail(`attribute ${attribute.slug}`, `categories ${missing.join(', ')} are missing`)
       continue
     }
     const result = await api('POST', '/product-attributes', {
-      categoryId,
+      categoryIds: attribute.categories.map((slug) => categoryIds.get(slug)),
       name: attribute.name,
       slug: attribute.slug,
       dataType: attribute.dataType,
@@ -225,12 +216,14 @@ async function seedAttributes(fixtures, categoryIds, stats) {
       status: attribute.status,
     })
     if (result.status === 201) {
+      ids.set(attribute.slug, result.body.id)
       stats.created++
-      console.log(`created  attribute ${attribute.category}/${attribute.slug}`)
+      console.log(`created  attribute ${attribute.slug}`)
     } else {
       fail(`attribute ${attribute.slug}`, describeError(result))
     }
   }
+  return ids
 }
 
 async function findProductBySku(sku) {
@@ -243,19 +236,54 @@ async function findVariantBySku(sku) {
   return page.content.find((v) => v.sku.toUpperCase() === sku.toUpperCase()) ?? null
 }
 
-async function seedProducts(fixtures, categoryIds, brandIds, stats) {
-  const ids = new Map()
-  for (const product of fixtures) {
+const variantBody = (variant) => ({
+  sku: variant.sku,
+  options: variant.options,
+  price: variant.price,
+  compareAtPrice: variant.compareAtPrice,
+  stockQuantity: variant.stockQuantity,
+  status: variant.status,
+})
+
+/**
+ * New products are created with their options and variants in one request. For products that already exist, only
+ * the fixture variants that are missing (by SKU) are added, in one request per product.
+ */
+async function seedProductsAndVariants(fixtures, categoryIds, brandIds, attributeIds, stats) {
+  for (const product of fixtures.products) {
+    const variants = fixtures.variants.filter((v) => v.product === product.sku)
     const existing = await findProductBySku(product.sku)
     if (existing) {
-      ids.set(product.sku, existing.id)
       stats.reused++
       console.log(`reused   product ${product.sku}`)
+      const missing = []
+      for (const variant of variants) {
+        if (await findVariantBySku(variant.sku)) {
+          stats.reused++
+          console.log(`reused   variant ${variant.sku}`)
+        } else {
+          missing.push(variant)
+        }
+      }
+      if (missing.length > 0) {
+        const result = await api('POST', `/products/${existing.id}/variants`, { variants: missing.map(variantBody) })
+        if (result.status === 201) {
+          stats.created += missing.length
+          missing.forEach((v) => console.log(`created  variant ${v.sku}`))
+        } else {
+          fail(`variants of ${product.sku}`, describeError(result))
+        }
+      }
       continue
     }
     const categoryId = categoryIds.get(product.category)
     if (!categoryId) {
       fail(`product ${product.sku}`, `category ${product.category} is missing`)
+      continue
+    }
+    const unknownAttribute = product.options.find((o) => o.attribute && !attributeIds.get(o.attribute))
+    if (unknownAttribute) {
+      fail(`product ${product.sku}`, `attribute ${unknownAttribute.attribute} is missing`)
       continue
     }
     const result = await api('POST', '/products', {
@@ -264,53 +292,33 @@ async function seedProducts(fixtures, categoryIds, brandIds, stats) {
       description: product.description,
       categoryId,
       brandId: brandIds.get(product.brand) ?? null,
-      price: product.price,
       currency: product.currency,
-      stockQuantity: product.stockQuantity,
       attributes: product.attributes,
+      hasVariants: true,
+      options: product.options.map((o) => ({
+        name: o.name,
+        attributeId: o.attribute ? attributeIds.get(o.attribute) : null,
+        values: o.values.map((value) => ({ value })),
+      })),
+      variants: variants.map(variantBody),
     })
     if (result.status === 201) {
-      ids.set(product.sku, result.body.id)
-      stats.created++
-      console.log(`created  product ${product.sku}`)
+      stats.created += 1 + variants.length
+      console.log(`created  product ${product.sku} with ${variants.length} variants`)
     } else {
       fail(`product ${product.sku}`, describeError(result))
     }
   }
-  return ids
 }
 
-async function seedVariants(fixtures, productIds, stats) {
-  for (const variant of fixtures) {
-    const existing = await findVariantBySku(variant.sku)
-    if (existing) {
-      stats.reused++
-      console.log(`reused   variant ${variant.sku}`)
-      continue
-    }
-    const productId = productIds.get(variant.product)
-    if (!productId) {
-      fail(`variant ${variant.sku}`, `product ${variant.product} is missing`)
-      continue
-    }
-    const result = await api('POST', '/product-variants', {
-      productId,
-      sku: variant.sku,
-      variantName: variant.variantName,
-      attributes: variant.attributes,
-      price: variant.price,
-      salePrice: variant.salePrice,
-      stockQuantity: variant.stockQuantity,
-      status: variant.status,
-    })
-    if (result.status === 201) {
-      stats.created++
-      console.log(`created  variant ${variant.sku}`)
-    } else {
-      fail(`variant ${variant.sku}`, describeError(result))
-    }
-  }
-}
+const sameOptions = (expected, actual) =>
+  Object.keys(expected).length === actual.length &&
+  actual.every((o) => {
+    const key = Object.keys(expected).find((name) => lower(name) === lower(o.name))
+    return key !== undefined && lower(expected[key]) === lower(o.value)
+  })
+
+const sameMoney = (a, b) => (a === null || a === undefined ? b === null || b === undefined : Number(a) === Number(b))
 
 /** Re-reads everything and checks that each fixture exists exactly once with the expected links. */
 async function verify(fixtures) {
@@ -340,15 +348,20 @@ async function verify(fixtures) {
   fixtures.brands.filter((b) => !brandSlugs.has(b.slug)).forEach((b) => problems.push(`brand ${b.slug} is missing`))
   report.push(['brands', brandCount, fixtures.brands.length])
 
-  const categoryIds = new Map(categories.map((c) => [c.slug, c.id]))
-  const attributesByCategory = await existingAttributes(categoryIds, fixtures.attributes)
+  const attributes = await getAllPages('/product-attributes')
   let attributeCount = 0
   for (const a of fixtures.attributes) {
-    const matches = (attributesByCategory.get(categoryIds.get(a.category)) ?? []).filter((x) => x.slug === a.slug)
-    if (matches.length === 1) {
-      attributeCount++
+    const matches = attributes.filter((x) => x.slug === a.slug)
+    if (matches.length !== 1) {
+      problems.push(`attribute ${a.slug} found ${matches.length} times`)
+      continue
+    }
+    const assigned = new Set(matches[0].categories.map((c) => c.id))
+    const missing = a.categories.filter((slug) => !assigned.has(categoryBySlug.get(slug)?.id))
+    if (missing.length > 0) {
+      problems.push(`attribute ${a.slug} is not assigned to ${missing.join(', ')}`)
     } else {
-      problems.push(`attribute ${a.category}/${a.slug} found ${matches.length} times`)
+      attributeCount++
     }
   }
   report.push(['attributes', attributeCount, fixtures.attributes.length])
@@ -370,6 +383,10 @@ async function verify(fixtures) {
       problems.push(`variant ${v.sku} is missing`)
     } else if (found.productSku.toUpperCase() !== v.product.toUpperCase()) {
       problems.push(`variant ${v.sku} belongs to ${found.productSku}, expected ${v.product}`)
+    } else if (!sameOptions(v.options, found.options)) {
+      problems.push(`variant ${v.sku} has options ${found.variantName}, expected ${Object.values(v.options).join(' / ')}`)
+    } else if (!sameMoney(v.price, found.price) || !sameMoney(v.compareAtPrice, found.compareAtPrice)) {
+      problems.push(`variant ${v.sku} has price ${found.price}/${found.compareAtPrice}, expected ${v.price}/${v.compareAtPrice}`)
     } else {
       variantCount++
     }
@@ -400,9 +417,8 @@ async function main() {
     const stats = { created: 0, reused: 0 }
     const categoryIds = await seedCategories(fixtures.categories, stats)
     const brandIds = await seedBrands(fixtures.brands, stats)
-    await seedAttributes(fixtures.attributes, categoryIds, stats)
-    const productIds = await seedProducts(fixtures.products, categoryIds, brandIds, stats)
-    await seedVariants(fixtures.variants, productIds, stats)
+    const attributeIds = await seedAttributes(fixtures.attributes, categoryIds, stats)
+    await seedProductsAndVariants(fixtures, categoryIds, brandIds, attributeIds, stats)
     console.log(`\nSeed run: ${stats.created} created, ${stats.reused} reused, ${failures.length} failed.`)
   }
 

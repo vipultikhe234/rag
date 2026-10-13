@@ -293,6 +293,25 @@ public class ProductOptionService {
         valueRepository.saveAllAndFlush(toSave);
     }
 
+    /** "256.0" -> "256" for an option linked to a NUMBER attribute; text that does not parse is compared as is. */
+    private static String canonicalOrSame(ProductAttribute attribute, String text) {
+        if (attribute == null) {
+            return text;
+        }
+        try {
+            return canonical(attribute, text, "options");
+        } catch (FieldValidationException e) {
+            return text;
+        }
+    }
+
+    private Map<UUID, ProductAttribute> linkedAttributes(Collection<ProductOption> options) {
+        Set<UUID> ids = options.stream().map(ProductOption::getAttributeId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return ids.isEmpty() ? Map.of() : attributeRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(ProductAttribute::getId, Function.identity()));
+    }
+
     private static String canonical(ProductAttribute attribute, String text, String field) {
         try {
             Object value = AttributeValueValidator.coerce(attribute, text);
@@ -332,6 +351,7 @@ public class ProductOptionService {
                         + optionNames)));
         Map<UUID, List<ProductOptionValue>> values = valuesByOption(options);
         Map<UUID, String> units = units(options);
+        Map<UUID, ProductAttribute> attributes = linkedAttributes(options);
         List<SelectedOption> selections = new ArrayList<>();
         for (ProductOption option : options) {
             String requested = byName.get(option.getName().toLowerCase(Locale.ROOT));
@@ -340,8 +360,11 @@ public class ProductOptionService {
                         + "'"));
                 continue;
             }
+            ProductAttribute attribute = option.getAttributeId() == null ? null
+                    : attributes.get(option.getAttributeId());
+            String wanted = canonicalOrSame(attribute, requested);
             values.getOrDefault(option.getId(), List.of()).stream()
-                    .filter(v -> v.getValue().equalsIgnoreCase(requested))
+                    .filter(v -> v.getValue().equalsIgnoreCase(wanted))
                     .findFirst()
                     .ifPresentOrElse(v -> selections.add(selected(option, v, units.get(option.getId()))),
                             () -> violations.add(new ApiError.FieldViolation(field, "'" + requested

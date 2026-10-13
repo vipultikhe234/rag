@@ -147,7 +147,8 @@ class ProductAttributeServiceTest {
 
         assertThatThrownBy(() -> service.create(request(List.of(phones.getId()), "Warranty Period",
                 AttributeDataType.NUMBER, null, "months")))
-                .isInstanceOf(ConflictException.class)
+                .isInstanceOfSatisfying(ConflictException.class, e ->
+                        assertThat(e.getCode()).isEqualTo("SLUG_ALREADY_EXISTS"))
                 .hasMessageContaining("warranty-period");
     }
 
@@ -158,8 +159,8 @@ class ProductAttributeServiceTest {
 
         assertThatThrownBy(() -> service.create(request(List.of(retired.getId()), "Colour", AttributeDataType.STRING,
                 null, null)))
-                .isInstanceOf(FieldValidationException.class)
-                .hasMessageContaining("Retired");
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().message()).contains("'Retired' is inactive"));
     }
 
     @Test

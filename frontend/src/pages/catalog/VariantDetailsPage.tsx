@@ -11,7 +11,8 @@ import { useLoader } from '../../features/catalog/hooks'
 import { deactivateHints } from '../../features/catalog/messages'
 import { linkClass } from '../../features/catalog/styles'
 import { StatusBadge } from '../../features/products/badges'
-import { formatDateTime, formatPrice } from '../../lib/format'
+import { SalePrice } from '../../features/products/Price'
+import { formatDateTime } from '../../lib/format'
 
 export function VariantDetailsPage() {
   const { id = '' } = useParams()
@@ -40,7 +41,7 @@ export function VariantDetailsPage() {
           </span>
         }
         description={<span className="font-mono">{v.sku}</span>}
-        back={{ to: `/product-variants?productId=${v.productId}`, label: `Back to ${v.productName} variants` }}
+        back={{ to: `/products/${v.productId}?tab=variants`, label: `Back to ${v.productName} variants` }}
         actions={
           isAdmin && (
             <>
@@ -64,13 +65,9 @@ export function VariantDetailsPage() {
       <Card title="Details">
         <DetailList>
           <DetailItem label="Product">
-            {isAdmin ? (
-              <Link to={`/products/${v.productId}/edit`} className={linkClass.text}>
-                {v.productName}
-              </Link>
-            ) : (
-              v.productName
-            )}
+            <Link to={`/products/${v.productId}`} className={linkClass.text}>
+              {v.productName}
+            </Link>
             <span className="ml-2 font-mono text-xs text-slate-500">{v.productSku}</span>
             {v.productStatus === 'INACTIVE' && (
               <span className="ml-2">
@@ -78,11 +75,24 @@ export function VariantDetailsPage() {
               </span>
             )}
           </DetailItem>
+          <DetailItem label="Options">
+            {v.options.length === 0 ? (
+              '—'
+            ) : (
+              <span className="flex flex-wrap gap-1.5">
+                {v.options.map((option) => (
+                  <Badge key={option.optionId}>
+                    {option.name}: {option.label}
+                  </Badge>
+                ))}
+              </span>
+            )}
+          </DetailItem>
           <DetailItem label="Price">
-            <span className="tabular-nums">{formatPrice(v.effectivePrice, v.currency)}</span>
-            {v.salePrice !== null && (
-              <span className="ml-2 text-xs text-slate-500">
-                on sale, regular <span className="line-through">{formatPrice(v.price, v.currency)}</span>
+            <SalePrice price={v.price} compareAtPrice={v.compareAtPrice} currency={v.currency} />
+            {v.onSale && (
+              <span className="ml-2">
+                <Badge tone="green">On sale</Badge>
               </span>
             )}
           </DetailItem>
@@ -90,6 +100,21 @@ export function VariantDetailsPage() {
             <span className="mr-2 tabular-nums">{v.stockQuantity}</span>
             <StockBadge level={v.stockLevel} />
           </DetailItem>
+          <DetailItem label="Barcode">{v.barcode ? <span className="font-mono">{v.barcode}</span> : '—'}</DetailItem>
+          <DetailItem label="Category / brand">
+            {v.category ?? '—'}
+            {v.brand && <span className="text-slate-500"> · {v.brand}</span>}
+          </DetailItem>
+          {v.imageUrl && (
+            <DetailItem label="Image" wide>
+              <img
+                src={v.imageUrl}
+                alt={v.variantName}
+                className="h-32 w-32 rounded-md border border-slate-200 object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </DetailItem>
+          )}
           <DetailItem label="Created">{formatDateTime(v.createdAt)}</DetailItem>
           <DetailItem label="Last updated">{formatDateTime(v.updatedAt)}</DetailItem>
         </DetailList>

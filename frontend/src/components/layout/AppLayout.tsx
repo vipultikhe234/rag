@@ -5,10 +5,10 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 
 const NAV_SECTIONS = [
-  { heading: null, items: [{ to: '/products', label: 'Product Management', icon: '▦' }] },
   {
-    heading: 'Catalog',
+    heading: 'Product Management',
     items: [
+      { to: '/products', label: 'Products', icon: '▦' },
       { to: '/categories', label: 'Categories', icon: '⊞' },
       { to: '/brands', label: 'Brands', icon: '◆' },
       { to: '/product-attributes', label: 'Attributes', icon: '≡' },

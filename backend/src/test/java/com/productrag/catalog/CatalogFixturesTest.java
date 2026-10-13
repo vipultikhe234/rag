@@ -18,8 +18,9 @@ import com.productrag.catalog.attribute.dto.ProductAttributeRequest;
 import com.productrag.catalog.brand.dto.BrandRequest;
 import com.productrag.catalog.category.dto.CategoryRequest;
 import com.productrag.catalog.validation.HttpUrlValidator;
+import com.productrag.catalog.option.dto.ProductOptionRequest;
 import com.productrag.catalog.variant.StockLevel;
-import com.productrag.catalog.variant.dto.ProductVariantRequest;
+import com.productrag.catalog.variant.dto.VariantDraft;
 import com.productrag.product.dto.ProductRequest;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -111,24 +112,31 @@ class CatalogFixturesTest {
     }
 
     @Test
-    void attributesAreValidAndOnlyOnActiveCategories() {
+    void attributesAreValidGloballyUniqueAndOnlyOnActiveCategories() {
         Map<String, JsonNode> categories = bySlug(root.get("categories"));
         Set<String> slugs = new HashSet<>();
+        Set<String> names = new HashSet<>();
         for (JsonNode a : root.get("attributes")) {
             AttributeDataType type = AttributeDataType.valueOf(a.get("dataType").asText());
             List<String> options = texts(a.get("options"));
-            ProductAttributeRequest request = new ProductAttributeRequest(UUID.randomUUID(), a.get("name").asText(),
+            List<String> assigned = texts(a.get("categories"));
+            ProductAttributeRequest request = new ProductAttributeRequest(
+                    assigned.stream().map(s -> UUID.randomUUID()).toList(), null, a.get("name").asText(),
                     a.get("slug").asText(), type, options, a.get("unit").isNull() ? null : a.get("unit").asText(),
                     a.get("required").asBoolean(), a.get("filterable").asBoolean(),
                     CatalogStatus.valueOf(a.get("status").asText()), null);
             assertThat(validator.validate(request)).as(request.name()).isEmpty();
             assertThat(request.slug()).isEqualTo(Slugs.from(request.name()));
             assertThat(slugs.add(request.slug())).as("unique slug " + request.slug()).isTrue();
+            assertThat(names.add(request.name().toLowerCase(Locale.ROOT))).as("unique name " + request.name()).isTrue();
 
-            JsonNode category = categories.get(a.get("category").asText());
-            assertThat(category).as("category of " + request.name()).isNotNull();
-            assertThat(category.get("status").asText()).as("category of " + request.name() + " is active")
-                    .isEqualTo("ACTIVE");
+            assertThat(assigned).as("categories of " + request.name()).isNotEmpty().doesNotHaveDuplicates();
+            for (String slug : assigned) {
+                JsonNode category = categories.get(slug);
+                assertThat(category).as("category " + slug + " of " + request.name()).isNotNull();
+                assertThat(category.get("status").asText()).as("category " + slug + " of " + request.name()
+                        + " is active").isEqualTo("ACTIVE");
+            }
             if (type == AttributeDataType.SELECT) {
                 assertThat(options).as(request.name() + " options").isNotEmpty();
                 assertThat(options.stream().map(o -> o.toLowerCase(Locale.ROOT)).distinct()).hasSameSizeAs(options);
@@ -146,44 +154,84 @@ class CatalogFixturesTest {
         categories.keySet().forEach(slug -> categoryIds.put(slug, UUID.randomUUID()));
         AttributeValueValidator values = attributeValidator(categories, categoryIds);
 
-        Map<String, String> productCategory = new HashMap<>();
+        Map<String, JsonNode> attributeFixtures = bySlug(root.get("attributes"));
+        Map<String, Map<String, List<String>>> productOptions = new HashMap<>();
         Set<String> skus = new HashSet<>();
         for (JsonNode p : root.get("products")) {
             String category = p.get("category").asText();
             assertThat(categories.get(category).get("status").asText()).isEqualTo("ACTIVE");
             assertThat(brands.get(p.get("brand").asText()).get("status").asText()).isEqualTo("ACTIVE");
             Map<String, Object> attributes = map(p.get("attributes"));
+            assertThat(p.get("hasVariants").asBoolean()).as(p.get("sku").asText() + " has variants").isTrue();
+            List<ProductOptionRequest> options = new ArrayList<>();
+            Map<String, List<String>> optionValues = new LinkedHashMap<>();
+            for (JsonNode o : p.get("options")) {
+                List<String> optionTexts = texts(o.get("values"));
+                options.add(new ProductOptionRequest(null, o.get("name").asText(), null,
+                        optionTexts.stream().map(t -> new ProductOptionRequest.Value(null, t)).toList()));
+                optionValues.put(o.get("name").asText(), optionTexts);
+                assertThat(optionTexts.stream().map(t -> t.toLowerCase(Locale.ROOT)).distinct())
+                        .as("unique values of " + o.get("name").asText()).hasSameSizeAs(optionTexts);
+                if (!o.get("attribute").isNull()) {
+                    JsonNode attribute = attributeFixtures.get(o.get("attribute").asText());
+                    assertThat(attribute).as("attribute of option " + o.get("name").asText()).isNotNull();
+                    assertThat(attribute.get("status").asText()).isEqualTo("ACTIVE");
+                    assertThat(chain(categories, category)).as("option attribute applies to " + category)
+                            .containsAnyElementsOf(texts(attribute.get("categories")));
+                    ProductAttribute definition = AttributeTestData.attribute(null, attribute.get("name").asText(),
+                            attribute.get("slug").asText(), AttributeDataType.valueOf(attribute.get("dataType").asText()),
+                            texts(attribute.get("options")), false, CatalogStatus.ACTIVE);
+                    optionTexts.forEach(t -> assertThatCode(() -> AttributeValueValidator.coerce(definition, t))
+                            .as("value " + t + " of " + o.get("name").asText()).doesNotThrowAnyException());
+                }
+            }
+            assertThat(optionValues.keySet().stream().map(n -> n.toLowerCase(Locale.ROOT)).distinct())
+                    .hasSameSizeAs(optionValues.keySet());
             ProductRequest request = new ProductRequest(p.get("name").asText(), p.get("sku").asText(),
-                    p.get("description").asText(), null, null, p.get("price").decimalValue(),
-                    p.get("currency").asText(), p.get("stockQuantity").asInt(), attributes, null, null,
-                    categoryIds.get(category), UUID.randomUUID());
+                    p.get("description").asText(), null, null, null, p.get("currency").asText(), null, attributes,
+                    null, null, categoryIds.get(category), UUID.randomUUID(), null, true, null, options, null);
             assertThat(validator.validate(request)).as(request.sku()).isEmpty();
             assertThatCode(() -> values.validate(categoryIds.get(category), attributes, Map.of()))
                     .as("attributes of " + request.sku()).doesNotThrowAnyException();
             assertThat(skus.add(request.sku().toUpperCase(Locale.ROOT))).as("unique SKU " + request.sku()).isTrue();
-            productCategory.put(request.sku(), category);
+            productOptions.put(request.sku(), optionValues);
         }
 
         List<StockLevel> levels = new ArrayList<>();
+        Set<String> combinations = new HashSet<>();
         for (JsonNode v : root.get("variants")) {
             String product = v.get("product").asText();
-            assertThat(productCategory).as("product of " + v.get("sku").asText()).containsKey(product);
-            Map<String, Object> attributes = map(v.get("attributes"));
-            BigDecimal salePrice = v.get("salePrice").isNull() ? null : v.get("salePrice").decimalValue();
-            ProductVariantRequest request = new ProductVariantRequest(UUID.randomUUID(), v.get("sku").asText(),
-                    v.get("variantName").asText(), attributes, v.get("price").decimalValue(), salePrice,
-                    v.get("stockQuantity").asInt(), CatalogStatus.valueOf(v.get("status").asText()), null);
-            assertThat(validator.validate(request)).as(request.sku()).isEmpty();
-            if (salePrice != null) {
-                assertThat(salePrice).as("sale price of " + request.sku()).isLessThan(request.price());
+            String sku = v.get("sku").asText();
+            assertThat(productOptions).as("product of " + sku).containsKey(product);
+            Map<String, String> selected = MAPPER.convertValue(v.get("options"),
+                    MAPPER.getTypeFactory().constructMapType(LinkedHashMap.class, String.class, String.class));
+            BigDecimal compareAt = v.get("compareAtPrice").isNull() ? null : v.get("compareAtPrice").decimalValue();
+            VariantDraft draft = new VariantDraft(sku, selected, null, v.get("price").decimalValue(), compareAt,
+                    v.get("stockQuantity").asInt(), null, null, null, CatalogStatus.valueOf(v.get("status").asText()));
+            assertThat(validator.validate(draft)).as(sku).isEmpty();
+            if (compareAt != null) {
+                assertThat(compareAt).as("compare-at price of " + sku).isGreaterThan(draft.price());
             }
-            assertThatCode(() -> values.validate(categoryIds.get(productCategory.get(product)), attributes, Map.of(),
-                    false)).as("attributes of " + request.sku()).doesNotThrowAnyException();
-            assertThat(skus.add(request.sku().toUpperCase(Locale.ROOT))).as("unique SKU " + request.sku()).isTrue();
-            levels.add(StockLevel.of(request.stockQuantity(), 5));
+            Map<String, List<String>> options = productOptions.get(product);
+            assertThat(selected.keySet()).as("options of " + sku).containsExactlyInAnyOrderElementsOf(options.keySet());
+            selected.forEach((name, value) -> assertThat(options.get(name)).as(name + " of " + sku).contains(value));
+            assertThat(combinations.add(product + "|" + new java.util.TreeMap<>(selected)))
+                    .as("unique combination of " + sku).isTrue();
+            assertThat(skus.add(sku.toUpperCase(Locale.ROOT))).as("unique SKU " + sku).isTrue();
+            levels.add(StockLevel.of(draft.stockQuantity(), 5));
         }
         assertThat(levels).contains(StockLevel.IN_STOCK, StockLevel.LOW_STOCK, StockLevel.OUT_OF_STOCK);
         assertThat(stream(root.get("variants")).map(v -> v.get("product").asText()).distinct()).hasSize(10);
+    }
+
+    private static List<String> chain(Map<String, JsonNode> categories, String slug) {
+        List<String> result = new ArrayList<>();
+        for (String current = slug; current != null; ) {
+            result.add(current);
+            JsonNode parent = categories.get(current).get("parent");
+            current = parent.isNull() ? null : parent.asText();
+        }
+        return result;
     }
 
     /** A real validator whose definitions come from the fixtures, inherited along the category tree. */
@@ -191,11 +239,12 @@ class CatalogFixturesTest {
                                                               Map<String, UUID> categoryIds) {
         Map<String, List<ProductAttribute>> own = new HashMap<>();
         for (JsonNode a : root.get("attributes")) {
-            String category = a.get("category").asText();
-            own.computeIfAbsent(category, k -> new ArrayList<>()).add(AttributeTestData.attribute(
-                    categoryIds.get(category), a.get("name").asText(), a.get("slug").asText(),
-                    AttributeDataType.valueOf(a.get("dataType").asText()), texts(a.get("options")),
-                    a.get("required").asBoolean(), CatalogStatus.valueOf(a.get("status").asText())));
+            for (String category : texts(a.get("categories"))) {
+                own.computeIfAbsent(category, k -> new ArrayList<>()).add(AttributeTestData.attribute(
+                        categoryIds.get(category), a.get("name").asText(), a.get("slug").asText(),
+                        AttributeDataType.valueOf(a.get("dataType").asText()), texts(a.get("options")),
+                        a.get("required").asBoolean(), CatalogStatus.valueOf(a.get("status").asText())));
+            }
         }
         ProductAttributeService service = mock(ProductAttributeService.class);
         when(service.applicableDefinitions(any(), anyBoolean())).thenReturn(List.of());

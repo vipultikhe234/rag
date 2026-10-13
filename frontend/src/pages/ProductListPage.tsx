@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { attributeApi, brandApi, categoryApi, productApi, vectorSyncApi } from '../api/endpoints'
 import { normalizeError } from '../api/errors'
-import type { PageResponse, Product, ProductAttribute, ProductStatus } from '../api/types'
+import type { PageResponse, Product, ProductAttribute, ProductStatus, StockFilter } from '../api/types'
 import { useAuth } from '../auth/authContext'
 import { useToast } from '../components/toast/toastContext'
+import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -13,7 +14,9 @@ import { Pagination } from '../components/ui/Pagination'
 import { LoadingBlock } from '../components/ui/Spinner'
 import { EmptyState, ErrorState, InlineAlert } from '../components/ui/States'
 import { useLoader } from '../features/catalog/hooks'
+import { linkClass } from '../features/catalog/styles'
 import { StatusBadge, SyncBadge } from '../features/products/badges'
+import { PriceRange } from '../features/products/Price'
 import { VectorSyncPanel } from '../features/products/VectorSyncPanel'
 import { formatPrice } from '../lib/format'
 
@@ -28,6 +31,18 @@ const SORT_OPTIONS = [
 ]
 /** The API accepts at most this many `attr` parameters per request. */
 const MAX_ATTRIBUTE_FILTERS = 10
+const PRICE = /^\d{0,10}(\.\d{0,2})?$/
+const STOCK_OPTIONS: Array<{ value: StockFilter; label: string }> = [
+  { value: 'AVAILABLE', label: 'Available (any stock)' },
+  { value: 'IN_STOCK', label: 'In stock' },
+  { value: 'LOW_STOCK', label: 'Low stock' },
+  { value: 'OUT_OF_STOCK', label: 'Out of stock' },
+]
+
+/** True when the attribute is assigned directly to the category (not inherited from a parent). */
+function ownedBy(definition: ProductAttribute, categoryId: string): boolean {
+  return definition.categories.some((category) => category.id === categoryId)
+}
 
 /** Parses repeated `attr=slug:value` URL parameters. */
 function parseAttributeFilters(values: string[]): Record<string, string> {
@@ -101,10 +116,16 @@ export function ProductListPage() {
   const brandId = params.get('brandId') ?? ''
   const attrKey = params.getAll('attr').join('\n')
   const status = (params.get('status') ?? '') as ProductStatus | ''
+  const minPrice = params.get('minPrice') ?? ''
+  const maxPrice = params.get('maxPrice') ?? ''
+  const stock = (params.get('stock') ?? '') as StockFilter | ''
+  const type = params.get('hasVariants') ?? ''
   const sort = params.get('sort') ?? 'createdAt,desc'
   const page = Math.max(0, Number(params.get('page') ?? '0') || 0)
 
   const [searchInput, setSearchInput] = useState(q)
+  const [minInput, setMinInput] = useState(minPrice)
+  const [maxInput, setMaxInput] = useState(maxPrice)
   const [data, setData] = useState<PageResponse<Product> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -145,7 +166,23 @@ export function ProductListPage() {
     const controller = new AbortController()
     const attr = attrKey ? attrKey.split('\n') : []
     productApi
-      .list({ q, categoryId, brandId, attr, status, page, size: PAGE_SIZE, sort }, controller.signal)
+      .list(
+        {
+          q,
+          categoryId,
+          brandId,
+          attr,
+          status,
+          minPrice,
+          maxPrice,
+          stock,
+          hasVariants: type === '' ? undefined : type === 'true',
+          page,
+          size: PAGE_SIZE,
+          sort,
+        },
+        controller.signal,
+      )
       .then((result) => {
         setData(result)
         setError(null)
@@ -157,7 +194,7 @@ export function ProductListPage() {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [q, categoryId, brandId, attrKey, status, page, sort, reloadKey])
+  }, [q, categoryId, brandId, attrKey, status, minPrice, maxPrice, stock, type, page, sort, reloadKey])
 
   const categories = useLoader((signal) => categoryApi.options(true, signal), 'categories')
   const brands = useLoader((signal) => brandApi.options(true, signal), 'brands')
@@ -168,7 +205,7 @@ export function ProductListPage() {
       definitions: categoryId
         ? (await attributeApi.applicable(categoryId, false, signal))
             .filter((d) => d.filterable)
-            .sort((a, b) => Number(b.categoryId === categoryId) - Number(a.categoryId === categoryId))
+            .sort((a, b) => Number(ownedBy(b, categoryId)) - Number(ownedBy(a, categoryId)))
         : [],
     }),
     categoryId,
@@ -245,17 +282,37 @@ export function ProductListPage() {
     }
   }
 
-  const filtersActive = Boolean(q || categoryId || brandId || attrKey || status)
+  const priceInvalid = !PRICE.test(minInput.trim()) || !PRICE.test(maxInput.trim())
+  const priceInverted =
+    !priceInvalid && minInput.trim() !== '' && maxInput.trim() !== '' && Number(minInput) > Number(maxInput)
+  const applyPrices = () => {
+    if (priceInvalid || priceInverted) return
+    updateParams({ minPrice: minInput.trim() || null, maxPrice: maxInput.trim() || null })
+  }
+
+  const filtersActive = Boolean(q || categoryId || brandId || attrKey || status || minPrice || maxPrice || stock || type)
   const clearFilters = () => {
     setSearchInput('')
-    updateParams({ q: null, categoryId: null, brandId: null, attr: null, status: null })
+    setMinInput('')
+    setMaxInput('')
+    updateParams({
+      q: null,
+      categoryId: null,
+      brandId: null,
+      attr: null,
+      status: null,
+      minPrice: null,
+      maxPrice: null,
+      stock: null,
+      hasVariants: null,
+    })
   }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Product Management</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Products</h1>
           <p className="text-sm text-slate-500">Manage the catalog that powers AI Chat answers.</p>
         </div>
         {isAdmin && (
@@ -274,18 +331,19 @@ export function ProductListPage() {
 
       <Card>
         <form
-          className="grid gap-4 md:grid-cols-3 xl:grid-cols-[2fr_1.5fr_1fr_1fr_1fr]"
+          className="grid gap-4 md:grid-cols-3 xl:grid-cols-5"
           role="search"
           aria-label="Filter products"
           onSubmit={(event) => {
             event.preventDefault()
             updateParams({ q: searchInput.trim() || null })
+            applyPrices()
           }}
         >
           <TextField
             label="Search"
             type="search"
-            placeholder="Name, SKU, category or brand"
+            placeholder="Name, SKU, slug, category or brand"
             value={searchInput}
             maxLength={100}
             onChange={(event) => setSearchInput(event.target.value)}
@@ -318,6 +376,47 @@ export function ProductListPage() {
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
           </SelectField>
+          <SelectField label="Type" value={type} onChange={(event) => updateParams({ hasVariants: event.target.value })}>
+            <option value="">All products</option>
+            <option value="true">With variants</option>
+            <option value="false">Simple products</option>
+          </SelectField>
+          <SelectField
+            label="Stock"
+            hint="Variant products: stock of active variants."
+            value={stock}
+            onChange={(event) => updateParams({ stock: event.target.value })}
+          >
+            <option value="">Any stock</option>
+            {STOCK_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </SelectField>
+          <TextField
+            label="Min price"
+            inputMode="decimal"
+            value={minInput}
+            hint="Variant products match on any active variant."
+            error={!PRICE.test(minInput.trim()) ? 'Invalid amount' : undefined}
+            onChange={(event) => setMinInput(event.target.value)}
+            onBlur={applyPrices}
+          />
+          <TextField
+            label="Max price"
+            inputMode="decimal"
+            value={maxInput}
+            error={
+              !PRICE.test(maxInput.trim())
+                ? 'Invalid amount'
+                : priceInverted
+                  ? 'Must be at least the min price'
+                  : undefined
+            }
+            onChange={(event) => setMaxInput(event.target.value)}
+            onBlur={applyPrices}
+          />
           <SelectField label="Sort by" value={sort} onChange={(event) => updateParams({ sort: event.target.value })}>
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -396,15 +495,32 @@ export function ProductListPage() {
                     {data.content.map((product) => (
                       <tr key={product.id} className="align-top hover:bg-slate-50">
                         <td className="px-3 py-3">
-                          <div className="font-medium text-slate-900">{product.name}</div>
+                          <Link to={`/products/${product.id}`} className={linkClass.text}>
+                            {product.name}
+                          </Link>
                           <div className="font-mono text-xs text-slate-500">{product.sku}</div>
+                          {product.hasVariants && (
+                            <div className="mt-1">
+                              <Badge tone="indigo">
+                                {product.variantSummary.activeCount}/{product.variantSummary.count} variants active
+                              </Badge>
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-3">
                           <div>{product.category}</div>
                           {product.brand && <div className="text-xs text-slate-500">{product.brand}</div>}
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
-                          {formatPrice(product.price, product.currency)}
+                          {product.hasVariants ? (
+                            <PriceRange
+                              min={product.variantSummary.minPrice}
+                              max={product.variantSummary.maxPrice}
+                              currency={product.currency}
+                            />
+                          ) : (
+                            formatPrice(product.price, product.currency)
+                          )}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums">
                           <span className={product.stockQuantity === 0 ? 'font-medium text-red-600' : undefined}>
@@ -433,12 +549,28 @@ export function ProductListPage() {
                           <td className="whitespace-nowrap px-3 py-3 text-right">
                             <div className="flex justify-end gap-1">
                               <Link
+                                to={`/products/${product.id}`}
+                                className={linkClass.row}
+                                aria-label={`View ${product.name}`}
+                              >
+                                View
+                              </Link>
+                              <Link
                                 to={`/products/${product.id}/edit`}
-                                className="inline-flex h-8 items-center rounded-md px-3 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                className={linkClass.row}
                                 aria-label={`Edit ${product.name}`}
                               >
                                 Edit
                               </Link>
+                              {product.hasVariants && (
+                                <Link
+                                  to={`/products/${product.id}?tab=variants`}
+                                  className={linkClass.row}
+                                  aria-label={`Manage variants of ${product.name}`}
+                                >
+                                  Variants
+                                </Link>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
