@@ -13,6 +13,6 @@ Schema reference: `ai/DATABASE.md`.
 - Do not run migrations or seeds against a shared or production DB automatically; verify the target DB first
   (seed scripts must refuse non-localhost targets).
 - Seeds must be deterministic and idempotent (match existing rows by slug/SKU, never duplicate).
-- Prefer a scratch DB (e.g. `ragdb_catalog_check`) or Testcontainers for verification.
+- Prefer a scratch DB (e.g. `ragdb_catalog_check`) or the `*_test` integration DB for verification.
 - Never print or store `DB_PASSWORD` or other `.env` values in output, docs or code.
 - Update `ai/DATABASE.md` after any schema or seed change.

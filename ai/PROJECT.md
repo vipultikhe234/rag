@@ -12,7 +12,7 @@ version for AI-assisted work.
 | Database | PostgreSQL 16 (local DB `RagDB`, localhost:5432) with `vector` (pgvector) and `pg_trgm` |
 | AI | Ollama locally (`nomic-embed-text` 768-dim, `llama3.2:3b`) or OpenAI-compatible API |
 | Frontend | React 19, TypeScript, Vite 8, Tailwind 4, React Router 7, Axios, react-hook-form + zod |
-| Tests | JUnit 5, Mockito, MockMvc (`@WebMvcTest`), Testcontainers (skipped without Docker) |
+| Tests | JUnit 5, Mockito, MockMvc (`@WebMvcTest`), opt-in integration test on a local `*_test` DB (`IT_DB_URL`); no Docker |
 
 ## Layout
 

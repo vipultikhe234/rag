@@ -20,8 +20,12 @@ Details: `docs/architecture.md`, `docs/rag-flow.md`, `docs/vector-sync.md`.
 ## Frontend
 - `src/api` (Axios client with JWT, `endpoints.ts`, `types.ts`, error normalization, SSE chat stream),
   `src/auth` (session storage, `ProtectedRoute requireAdmin`), `src/components` (layout `AppLayout` with
-  `NAV_ITEMS`, ui kit, toasts), `src/features` (products, chat), `src/pages`.
-- Routes in `src/App.tsx`; pages lazy-loaded where heavy (chat).
+  `NAV_SECTIONS`, ui kit, toasts), `src/features` (products, chat, catalog), `src/pages` (+ `pages/catalog`).
+- `features/catalog`: `CatalogUi` (PageHeader, DetailList, StatusToggle with confirm + toast, ListBody
+  loading/error/empty), `hooks` (`useListParams` URL filters, `useDebouncedSearch`, `useLoader`),
+  `useSpecDefinitions` + `SpecFields` + `attributeValues` (typed attribute inputs shared by product and variant
+  forms), `formErrors.applyServerErrors`, `validation`, `messages`, `styles`.
+- Routes in `src/App.tsx`; catalog routes generated from `CATALOG_MODULES`; chat and catalog pages lazy-loaded.
 
 ## Database
 - One PostgreSQL DB holds products, catalog tables, embeddings, outbox, users, chat. See `ai/DATABASE.md`.

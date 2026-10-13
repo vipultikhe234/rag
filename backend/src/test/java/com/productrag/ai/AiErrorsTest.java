@@ -2,12 +2,14 @@ package com.productrag.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
 class AiErrorsTest {
 
@@ -34,6 +36,16 @@ class AiErrorsTest {
                 new TransientAiException("HTTP 429 - Rate limit reached for requests"));
 
         assertThat(translated.getCode()).isEqualTo("AI_PROVIDER_UNAVAILABLE");
+        assertThat(translated.isTransient()).isTrue();
+    }
+
+    @Test
+    void refusedConnectionIsReportedAsUnreachableAndRetried() {
+        AiProviderException translated = AiErrors.translate(new ResourceAccessException(
+                "I/O error on POST request for \"http://localhost:11434/v1/embeddings\": null", new ConnectException()));
+
+        assertThat(translated.getCode()).isEqualTo("AI_PROVIDER_UNREACHABLE");
+        assertThat(translated.getMessage()).contains("Ollama");
         assertThat(translated.isTransient()).isTrue();
     }
 

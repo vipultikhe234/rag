@@ -2,6 +2,20 @@
 
 Newest first. One entry per meaningful change; no conversation logs or source dumps.
 
+## 2026-10-13 — Catalog modules: tests, seed, admin UI, docs
+- Backend: catalog controllers accept `PATCH /{id}` as an alias of `PUT /{id}` (full body + `version`).
+- Tests: fixed existing product tests; added category, brand, attribute, validator, variant, catalog-links,
+  catalog security and fixture tests; `ProductRagIntegrationTest` now resets catalog tables and creates the
+  category/brand it uses. `mvnw test`: 202 run, 0 failures, 13 skipped.
+- Seed: `scripts/catalog-fixtures.json` + `scripts/seed-catalog.mjs` (REST, localhost-only, idempotent,
+  `--yes`, `--verify-only`, final verification); `seed-sample-products.mjs` creates missing categories/brands.
+- DB: V3 applied to scratch `ragdb_catalog_check` (seeded twice, no duplicates) and to `RagDB` (seeded: 129
+  created, 1 reused; rerun reused all 130).
+- Frontend: catalog list/details/create/edit pages for 4 modules (lazy chunk), "Catalog" nav group, shared
+  catalog UI/hooks, product form with category/brand selects and typed attribute fields, product list
+  category/brand/attribute filters. Lint + build pass; not browser-tested.
+- Docs: README (features, seed, API table, V3, tests), `docs/api-examples.md` catalog section.
+
 ## 2026-10-13 — AI context folder
 - Added `ai/` (project, requirements, architecture, database, API, rules, testing, tasks, changelog, module
   context) and `.cursor/rules/*.mdc` that point the agent to it.

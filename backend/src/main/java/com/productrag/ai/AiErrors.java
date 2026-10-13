@@ -1,5 +1,8 @@
 package com.productrag.ai;
 
+import java.net.ConnectException;
+import java.net.UnknownHostException;
+import java.nio.channels.UnresolvedAddressException;
 import java.util.Locale;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.web.client.RestClientResponseException;
@@ -8,8 +11,8 @@ import org.springframework.web.client.RestClientResponseException;
  * Maps raw Spring AI / HTTP client exceptions to {@link AiProviderException}.
  * Non-transient provider responses (4xx other than 429) are "rejected"; an exhausted account quota
  * (HTTP 429 with insufficient_quota) is reported separately because retrying cannot succeed until billing
- * changes; everything else (5xx, 429 rate limits, timeouts, connection errors, unknown failures) is treated
- * as temporarily unavailable.
+ * changes; a refused connection or unknown host is "unreachable" (typically Ollama not running); everything
+ * else (5xx, 429 rate limits, timeouts, unknown failures) is treated as temporarily unavailable.
  */
 public final class AiErrors {
 
@@ -34,7 +37,24 @@ public final class AiErrors {
                 return AiProviderException.rejected(ex);
             }
         }
+        if (isConnectionFailure(ex)) {
+            return AiProviderException.unreachable(ex);
+        }
         return AiProviderException.unavailable(ex);
+    }
+
+    /** Nothing is listening at the configured address, or the host name cannot be resolved. */
+    private static boolean isConnectionFailure(Throwable ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            if (current instanceof ConnectException || current instanceof UnknownHostException
+                    || current instanceof UnresolvedAddressException) {
+                return true;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return false;
     }
 
     private static boolean isQuotaExhausted(Throwable ex) {

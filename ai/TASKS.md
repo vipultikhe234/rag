@@ -4,36 +4,37 @@ Legend: `[x]` done and verified, `[~]` code written but not verified, `[ ]` not 
 Last updated: 2026-10-13.
 
 ## Catalog modules
-- [~] Category Management — backend written and compiles; no UI, no tests, not run against a DB
-- [~] Brand Management — backend written and compiles; no UI, no tests
-- [~] Product Attributes Management — backend + `AttributeValueValidator` written and compile; no UI, no tests
-- [~] Product Variant Management — backend written and compiles; no UI, no tests
-- [~] Product integration — `categoryId`/`brandId`, active-only assignment, attribute validation, list filters
-  (`categoryId`, `brandId`, `attr=`), delete guard; compiles, untested (`jsonb_extract_path_text` filter unverified)
-- [~] Schema — `V3__catalog_modules.sql` written; not applied to any database yet
-- [ ] Seed 30 categories
-- [ ] Seed 30 brands
-- [ ] Seed 30 attributes
-- [ ] Seed 30 variants (+ prerequisite products)
-- [ ] Admin UI integration (4 modules: list/create/edit/details; nav group; product form/list integration)
-- [~] API validation — Bean Validation + service rules in code; untested
-- [ ] Automated tests (fix existing tests first — they no longer compile; then new module tests)
-- [ ] Verify all 120 required fixture records
-- [ ] Docs: README + `docs/api-examples.md` catalog sections
-- [ ] Optional: Swagger/OpenAPI (springdoc not in `pom.xml`; add only if non-disruptive)
+- [x] Category Management — backend, UI (list/details/create/edit), unit + security tests, verified via API on
+  scratch DB `ragdb_catalog_check`
+- [x] Brand Management — same
+- [x] Product Attributes Management — backend + `AttributeValueValidator`, UI, tests, API-verified
+- [x] Product Variant Management — backend, UI, tests, API-verified (stock/price filters, sale price rule)
+- [x] Product integration — `categoryId`/`brandId`, active-only assignment, attribute validation, list filters
+  (`categoryId` incl. descendants, `brandId`, `attr=`), delete guard; API-verified incl. JSONB `attr` filter
+- [x] Schema — `V3__catalog_modules.sql` applied cleanly on `ragdb_catalog_check` and on `RagDB`
+- [x] Seed 30 categories (16 subcategories, 4 inactive)
+- [x] Seed 30 brands (the 30 names from the prompt; 3 inactive; no logo URLs)
+- [x] Seed 30 attributes (2 inactive, 2 required)
+- [x] Seed 30 variants (+ 10 prerequisite products, not counted)
+- [~] Admin UI integration — 12 catalog pages, nav group "Catalog", product form (category/brand selects, typed
+  spec fields) and product list (category/brand/attribute filters). `npm run lint` + `npm run build` pass;
+  **not exercised in a browser** (needs an admin sign-in)
+- [x] API validation — Bean Validation + service rules; covered by unit, WebMvc and live API checks
+- [x] Automated tests — 202 run, 0 failures, 13 skipped (Testcontainers; no Docker)
+- [x] Verify all 120 required fixture records — scratch DB (2 runs: 130 created, then 130 reused) and `RagDB`
+- [x] Docs: README + `docs/api-examples.md` catalog sections
+- [ ] Optional: Swagger/OpenAPI — not added (springdoc not in `pom.xml`; would be a new dependency)
 
-## Next steps (in order)
-1. Fix existing tests to compile; add catalog unit + `@WebMvcTest` security tests; run `mvnw test`.
-2. Write `scripts/seed-catalog.mjs` (REST-based, localhost guard, idempotent by slug/SKU, verifies counts) and
-   update `seed-sample-products.mjs` to ensure its categories/brands exist.
-3. Verify V3 + seed twice on scratch DB `ragdb_catalog_check` (backend on 8081), then on `RagDB` with approval.
-4. Frontend pages and product form/list integration; `npm run lint` + `npm run build`.
-5. Docs.
+## Next steps
+1. Sign in at http://localhost:5173 and click through the catalog pages and product form (browser check).
+2. Start Ollama, then "Retry all failed" in the AI search index panel for the seeded products.
+3. Run `mvnw test` on a machine with Docker so `ProductRagIntegrationTest` (updated for catalog tables) runs.
+4. Optional: drop scratch DB `ragdb_catalog_check` when no longer needed (user decision).
 
 ## Blockers / notes
-- Original prompt's exact 30 brand names were not recorded; planned list (to confirm with user): Samsung,
-  Apple, Dell, HP, Lenovo, Asus, Acer, Sony, LG, Xiaomi, OnePlus, Philips, Bosch, Whirlpool, Nike, Adidas,
-  Puma, Levi's, Zara, H&M, Titan, Fossil, boAt, JBL, Milton, Prestige, Lakme, Nivea, Nestle, Wildcraft.
-- Category and attribute fixture lists: see `ai/context/product-categories.md`, `product-attributes.md`.
 - Docker not installed: Testcontainers integration tests are skipped.
-- The user's running backend must be restarted after these changes (V3 runs on next start against `RagDB`).
+- No orders module exists, so "variant history preserved for orders" is only covered by deactivate-not-delete.
+- `RagDB` also holds 10 categories / 11 brands backfilled by V3 from existing product text (Audio, Wearables,
+  SoundWave, …); they are not fixtures and were left untouched.
+- Brand "Apple" already existed in `RagDB` (backfill, no website); the seed reused it unchanged.
+- Main JS chunk is 502 kB (Vite advisory warning at 500 kB); catalog pages are lazy-loaded (53 kB chunk).

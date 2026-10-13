@@ -15,6 +15,8 @@ export interface NormalizedError {
 const FRIENDLY_MESSAGES: Record<string, string> = {
   AI_PROVIDER_NOT_CONFIGURED: 'The AI assistant is not configured yet. Ask an administrator to set OPENAI_API_KEY.',
   AI_PROVIDER_UNAVAILABLE: 'The AI service is temporarily unavailable. Please try again in a moment.',
+  AI_PROVIDER_UNREACHABLE:
+    'The AI service cannot be reached. If it runs on this computer (Ollama), start it and try again.',
   AI_PROVIDER_ERROR: 'The AI service rejected the request. Please contact an administrator.',
   AI_PROVIDER_QUOTA_EXCEEDED:
     'The AI service account has run out of credits or quota. An administrator needs to add credits.',

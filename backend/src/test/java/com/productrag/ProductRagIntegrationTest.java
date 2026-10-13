@@ -22,34 +22,36 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 /**
- * End-to-end tests against a real PostgreSQL + pgvector (Testcontainers) with fake AI models.
- * Skipped automatically when Docker is not available.
+ * End-to-end tests against a real local PostgreSQL + pgvector database with fake AI models.
+ * Runs only when {@code IT_DB_URL} points to a localhost database whose name ends in {@code _test}
+ * (credentials in {@code IT_DB_USERNAME} / {@code IT_DB_PASSWORD}); the tests delete all rows in it.
  */
-@Testcontainers(disabledWithoutDocker = true)
+@EnabledIfEnvironmentVariable(named = "IT_DB_URL",
+        matches = "jdbc:postgresql://(localhost|127\\.0\\.0\\.1)(:\\d+)?/[A-Za-z0-9_]+_test")
 @SpringBootTest(properties = {
         "app.security.jwt.secret=" + TestProperties.JWT_SECRET,
         "app.security.admin.email=",
         "app.vector-sync.enabled=false",
         "app.vector-sync.max-attempts=3",
         "app.rag.similarity-threshold=0.2",
+        // Every test signs in during setUp; the default limit (10/min) would reject later tests with 429.
+        "app.rate-limit.login-per-minute=1000",
         "spring.ai.openai.api-key=test-key",
         "spring.ai.model.embedding=none",
         "spring.ai.model.chat=none",
@@ -58,10 +60,12 @@ import org.testcontainers.utility.DockerImageName;
 @AutoConfigureMockMvc
 class ProductRagIntegrationTest {
 
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
-            DockerImageName.parse("pgvector/pgvector:pg17").asCompatibleSubstituteFor("postgres"));
+    @DynamicPropertySource
+    static void testDatabase(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> System.getenv("IT_DB_URL"));
+        registry.add("spring.datasource.username", () -> System.getenv("IT_DB_USERNAME"));
+        registry.add("spring.datasource.password", () -> System.getenv("IT_DB_PASSWORD"));
+    }
 
     @TestConfiguration
     static class FakeAiConfig {
@@ -103,8 +107,15 @@ class ProductRagIntegrationTest {
         jdbc.update("DELETE FROM chat_messages");
         jdbc.update("DELETE FROM chat_conversations");
         jdbc.update("DELETE FROM vector_sync_events");
+        jdbc.update("DELETE FROM product_variants");
         jdbc.update("DELETE FROM products");
+        jdbc.update("DELETE FROM product_attributes");
+        jdbc.update("DELETE FROM categories");
+        jdbc.update("DELETE FROM brands");
         jdbc.update("DELETE FROM app_users");
+        // productJson refers to these by name.
+        jdbc.update("INSERT INTO categories (id, name, slug) VALUES (?, 'Electronics', 'electronics')", UUID.randomUUID());
+        jdbc.update("INSERT INTO brands (id, name, slug) VALUES (?, 'ExampleBrand', 'examplebrand')", UUID.randomUUID());
         embeddingModel.reset();
         chatModel.reset();
         adminToken = login(createUser("admin@example.com", Role.ADMIN));

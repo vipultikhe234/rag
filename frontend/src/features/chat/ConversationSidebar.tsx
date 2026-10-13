@@ -81,7 +81,7 @@ export function ConversationSidebar({
         </label>
       </div>
 
-      <nav aria-label="Chat history" className="flex-1 overflow-y-auto px-3 pb-4">
+      <nav aria-label="Chat history" className="scrollbar-none flex-1 overflow-y-auto px-3 pb-4">
         {loading ? (
           <ul className="space-y-2 px-3 pt-4" aria-label="Loading chats">
             {[0, 1, 2, 3, 4].map((index) => (

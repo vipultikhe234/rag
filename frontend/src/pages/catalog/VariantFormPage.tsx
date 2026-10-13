@@ -137,10 +137,11 @@ export function VariantFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const original = variant?.attributes ?? NO_ATTRIBUTES
   const specs = useSpecDefinitions(categoryId, original, getValues, setValue)
 
+  // New links need an active product; the variant's current product stays selectable even when inactive.
   const productChoices = useMemo(() => {
-    const all = products.data?.content ?? []
+    const all = (products.data?.content ?? []).filter((p) => p.status === 'ACTIVE' || p.id === variant?.productId)
     return selected && !all.some((p) => p.id === selected.id) ? [selected, ...all] : all
-  }, [products.data, selected])
+  }, [products.data, selected, variant])
 
   const onSubmit = async (values: FormValues) => {
     setServerError(null)

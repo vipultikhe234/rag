@@ -7,7 +7,7 @@ PostgreSQL 16, local DB `RagDB` (credentials only in `.env`). JPA `ddl-auto: non
 |------|---------|-------------------|
 | `V1__initial_schema.sql` | extensions, products, product_embeddings, vector_sync_events, app_users, chat tables | yes |
 | `V2__align_embedding_dimension.sql` | embedding column dimension = `${embedding_dimensions}` | yes |
-| `V3__catalog_modules.sql` | catalog tables + product FKs + backfill | **no, not yet run anywhere** |
+| `V3__catalog_modules.sql` | catalog tables + product FKs + backfill | yes (also on scratch `ragdb_catalog_check`) |
 
 Rule: never edit an applied migration; add `V{n+1}__*.sql`.
 
@@ -36,8 +36,14 @@ Unique-constraint names are mapped to API error codes in `GlobalExceptionHandler
 ## Seeds
 | Script | Purpose | Status |
 |--------|---------|--------|
-| `scripts/seed-sample-products.mjs` + `sample-products.json` | 20 sample products via REST | exists; needs categories/brands to exist once V3 is applied |
-| `scripts/seed-catalog.mjs` (planned) | 30 categories, 30 brands, 30 attributes, prerequisite products, 30 variants | not written yet |
+| `scripts/seed-sample-products.mjs` + `sample-products.json` | 20 sample products via REST | creates missing categories/brands by name first |
+| `scripts/seed-catalog.mjs` + `catalog-fixtures.json` | 30 categories, 30 brands, 30 attributes, 10 prerequisite products, 30 variants | run on scratch DB (twice) and `RagDB` (twice); verified |
 
 Required fixture counts: 30 per module, 120 total (fixture records identified by slug/SKU; pre-existing
 backfilled rows are not counted).
+
+## Current `RagDB` contents (after seeding, 2026-10-13)
+- categories 40 (30 fixtures + 10 backfilled), brands 41 (29 created + Apple reused + 11 other backfilled),
+  product_attributes 30, product_variants 30, products 31 (21 existing + 10 prerequisite).
+- No embedding columns or vector rows for catalog tables; only products are embedded.
+- Scratch DB `ragdb_catalog_check` (local) still exists with the fixtures only; safe to drop when not needed.

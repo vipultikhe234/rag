@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { NavLink, Outlet, useMatch, useNavigate } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/authContext'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -24,6 +24,13 @@ export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
   // The chat manages its own scrolling areas, like a full-screen app.
   const fullHeight = useMatch('/chat') !== null
+  const { pathname } = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
+
+  // Only <main> scrolls, so the browser no longer resets the position when the page changes.
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 })
+  }, [pathname])
 
   const handleLogout = () => {
     logout()
@@ -31,7 +38,7 @@ export function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen lg:flex">
+    <div className="flex h-dvh overflow-hidden">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:shadow"
@@ -41,13 +48,13 @@ export function AppLayout() {
 
       <aside
         id="app-sidebar"
-        className={`${menuOpen ? 'block' : 'hidden'} fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-slate-900 text-slate-100 lg:static lg:block`}
+        className={`${menuOpen ? 'flex' : 'hidden'} fixed inset-y-0 left-0 z-40 w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-900 text-slate-100 lg:static lg:flex`}
       >
-        <div className="flex h-16 items-center gap-2 px-6 text-lg font-semibold">
+        <div className="flex h-16 shrink-0 items-center gap-2 px-6 text-lg font-semibold">
           <img src="/favicon.svg" alt="" className="h-7 w-7" />
           Product RAG
         </div>
-        <nav aria-label="Main navigation" className="space-y-4 px-3 py-4">
+        <nav aria-label="Main navigation" className="scrollbar-none min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4">
           {NAV_SECTIONS.map((section, index) => (
             <div key={section.heading ?? index} className="space-y-1">
               {section.heading && (
@@ -78,8 +85,8 @@ export function AppLayout() {
         <div className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" aria-hidden="true" onClick={() => setMenuOpen(false)} />
       )}
 
-      <div className={`flex min-w-0 flex-1 flex-col ${fullHeight ? 'h-screen' : ''}`}>
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="z-20 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -107,7 +114,11 @@ export function AppLayout() {
 
         <main
           id="main-content"
-          className={fullHeight ? 'min-h-0 flex-1 overflow-hidden' : 'flex-1 px-4 py-6 sm:px-6 lg:px-8'}
+          ref={mainRef}
+          tabIndex={-1}
+          className={`min-h-0 flex-1 focus:outline-none ${
+            fullHeight ? 'overflow-hidden' : 'scrollbar-none overflow-y-auto px-4 py-6 sm:px-6 lg:px-8'
+          }`}
         >
           <Outlet />
         </main>

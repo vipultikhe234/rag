@@ -31,5 +31,5 @@
 - Never put secrets (passwords, JWT secret, API keys, DB credentials) in code, docs or frontend.
 - Never log secrets or full authorization headers.
 - No destructive DB commands (drop, truncate, reset, bulk delete) on `RagDB` without explicit approval.
-- Tests use mocks, an isolated DB or Testcontainers, never the dev DB, never paid AI calls.
+- Tests use mocks, an isolated `*_test` DB, never the dev DB, never paid AI calls.
 - Do not claim production readiness or passing tests unless verified.

@@ -1,7 +1,7 @@
 # API contracts (as implemented in code)
 
 Base `/api/v1`, JSON, `Authorization: Bearer <jwt>`. Examples with bodies: `docs/api-examples.md`.
-Catalog endpoints below are written in code but **not yet verified against a running server** (see `TASKS.md`).
+Catalog endpoints below were verified against a running server on a scratch DB (see `TESTING.md`).
 
 ## Shared conventions
 - Paging: `page` (>= 0), `size` (1-100), `sort=prop,asc|desc` (allowlist per endpoint; `id` tiebreak).
@@ -11,7 +11,8 @@ Catalog endpoints below are written in code but **not yet verified against a run
   `*_ALREADY_EXISTS` / `SLUG_ALREADY_EXISTS` / `SKU_ALREADY_EXISTS` (409), `CONCURRENT_MODIFICATION` (409),
   `RECORD_IN_USE` (409), 401 unauthenticated, 403 not admin.
 - Auth: GET = any authenticated user; POST/PUT/PATCH/DELETE = `ADMIN`.
-- Update bodies are full representations; send `version` for optimistic locking.
+- Update bodies are full representations; send `version` for optimistic locking. Catalog resources accept both
+  `PUT /{id}` and `PATCH /{id}` for updates (same body).
 - Status change: `PATCH /{id}/status` body `{"status":"ACTIVE"|"INACTIVE"}`.
 
 ## Existing (pre-catalog)
@@ -22,7 +23,7 @@ Catalog endpoints below are written in code but **not yet verified against a run
 | GET/POST | `/products` | list / create (admin) |
 | GET/PUT/DELETE | `/products/{id}` | delete blocked with `409 PRODUCT_HAS_VARIANTS` if variants exist |
 | PATCH | `/products/{id}/status` | `ACTIVE`/`INACTIVE` |
-| GET | `/products/categories` | distinct category names (legacy, still used) |
+| GET | `/products/categories` | distinct category names (legacy; the UI now uses `/categories/options`) |
 | POST | `/chat/stream` | SSE `meta`, `delta`, `done`/`error` |
 | GET/PATCH/DELETE | `/chat/conversations[/{id}]`, GET `/chat/conversations/{id}/messages` | owner only |
 | GET/POST | `/admin/vector-sync/status|events|retry/{eventId}|retry-failed|resync-missing` | admin |
@@ -43,7 +44,7 @@ Catalog endpoints below are written in code but **not yet verified against a run
 | GET | `/categories` | `q`, `status`, `parentId`, `rootsOnly`, paging; sort `name|slug|status|createdAt|updatedAt` (default `name,asc`) |
 | GET | `/categories/options` | `includeInactive` -> `[{id,name,slug,parentId,path,status}]` |
 | GET | `/categories/{id}` | |
-| POST / PUT | `/categories`, `/categories/{id}` | `{name*, slug, description, imageUrl, parentId, status, version}` |
+| POST / PUT / PATCH | `/categories`, `/categories/{id}` | `{name*, slug, description, imageUrl, parentId, status, version}` |
 | PATCH | `/categories/{id}/status` | |
 | DELETE | `/categories/{id}` | 409 `CATEGORY_IN_USE` / `CATEGORY_HAS_SUBCATEGORIES` / `CATEGORY_HAS_ATTRIBUTES` |
 

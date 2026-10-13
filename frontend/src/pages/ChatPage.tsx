@@ -388,7 +388,7 @@ export function ChatPage() {
         </header>
 
         {isEmpty ? (
-          <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16">
+          <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16 scrollbar-none">
             <div className="w-full max-w-3xl">
               <div className="mb-8 flex flex-col items-center text-center">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 text-indigo-600">
@@ -420,7 +420,7 @@ export function ChatPage() {
             <div
               ref={scrollRef}
               onScroll={onScroll}
-              className="flex-1 overflow-y-auto"
+              className="scrollbar-none flex-1 overflow-y-auto"
               aria-live="polite"
               aria-busy={streaming || messagesLoading}
             >

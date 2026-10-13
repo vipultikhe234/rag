@@ -5,7 +5,7 @@ spring:
     # Imports the repository-root .env (KEY=value lines). Real environment variables take precedence.
     import: "optional:file:${APP_ENV_FILE:../.env}[.properties]"
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/product_rag}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/product_rag}
     username: ${DB_USERNAME:product_rag}
     password: ${DB_PASSWORD:}
     hikari:

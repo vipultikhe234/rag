@@ -15,7 +15,7 @@ A full-stack admin panel for managing a product catalog and chatting with it in 
 | Database | PostgreSQL 16/17 with the `vector` (pgvector) and `pg_trgm` extensions |
 | AI       | OpenAI, or any OpenAI-compatible server such as [Ollama](https://ollama.com) (free, runs locally) |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, React Router 7, Axios, React Hook Form, Zod, react-markdown |
-| Tests    | JUnit 5, Mockito, Spring MockMvc, Testcontainers (pgvector) |
+| Tests    | JUnit 5, Mockito, Spring MockMvc, opt-in integration tests on a local `*_test` database |
 
 More documentation: [Architecture](docs/architecture.md) · [API examples](docs/api-examples.md) ·
 [RAG flow](docs/rag-flow.md) · [Vector sync](docs/vector-sync.md) ·
@@ -51,11 +51,29 @@ More documentation: [Architecture](docs/architecture.md) · [API examples](docs/
 ### Product Management
 
 - Create, edit, view and delete products (with confirmation).
-- List with pagination and sorting; search by name, SKU, category or brand; filter by category and status.
+- List with pagination and sorting; search by name, SKU, category or brand; filter by category (including
+  subcategories), brand, status and filterable attributes (for example RAM = 16).
 - Activate / deactivate products. Inactive products disappear from chat answers immediately.
-- Free-form attributes stored as JSONB (for example `color`, `warranty`, `features`).
+- Each product belongs to a category and optionally a brand. Attributes are stored as JSONB: values for the
+  category's attribute definitions are type-checked, and other free-form keys (for example `features`) are allowed.
 - Optimistic locking, so two admins cannot silently overwrite each other's changes.
 - Per-product **AI index** status with a manual retry, plus an **AI search index** panel for the sync queue.
+
+### Catalog administration
+
+Four modules under **Catalog** in the sidebar, each with list (search, filters, sorting, pagination), details,
+create and edit pages. Reads are open to every signed-in user; changes are admin-only.
+
+- **Categories**: a parent/child hierarchy with product, subcategory and attribute counts.
+- **Brands**: optional website and logo URLs, with product counts.
+- **Attributes**: typed specifications (text, number, yes/no, select) defined on a category and inherited by its
+  subcategories. Each can be required and/or offered as a product-list filter.
+- **Variants**: sellable versions of a product with their own SKU, price, optional sale price and stock, with
+  low/out-of-stock indicators.
+
+Records are retired by **deactivating** them (with a confirmation). Existing links are kept, but inactive records
+can't be newly assigned. Only unused categories and brands can be deleted. Catalog records are not embedded and
+are not used by the chat.
 
 ### AI Chat (ChatGPT-style)
 
@@ -87,8 +105,9 @@ cd frontend
 npm install
 npm run dev
 
-# 4. Optional: 20 sample products (in a third terminal, with the backend running)
-node scripts/seed-sample-products.mjs
+# 4. Optional sample data (in a third terminal, with the backend running)
+node scripts/seed-sample-products.mjs    # 20 sample products
+node scripts/seed-catalog.mjs            # 30 categories, brands, attributes and variants (+ 10 products)
 ```
 
 Open http://localhost:5173 and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`.
@@ -104,8 +123,6 @@ Open http://localhost:5173 and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` fro
 | Node.js / npm | Node 22.12 or newer | `node --version`, `npm --version` |
 | PostgreSQL + pgvector | PostgreSQL 13+ with pgvector 0.5+ | See [section 5](#5-database-setup-postgresql--pgvector) |
 | AI provider | OpenAI API key **or** Ollama | See [section 7](#7-ai-provider-openai-or-ollama) |
-| Docker (optional) | Any recent version | `docker --version`; used by `docker compose` and the Testcontainers tests |
-
 On Windows, set `JAVA_HOME` if it is missing, for example `$env:JAVA_HOME='C:\Program Files\Java\jdk-21'`.
 
 > **Maven Wrapper:** there is no need to install Maven. Use `.\mvnw.cmd` (Windows) or `./mvnw` (macOS/Linux)
@@ -118,11 +135,11 @@ On Windows, set `JAVA_HOME` if it is missing, for example `$env:JAVA_HOME='C:\Pr
 
 ```text
 .env.example            Configuration template (copy to .env; .env is git-ignored)
-docker-compose.yml      PostgreSQL 17 + pgvector for local development
 backend/                Spring Boot application (Maven Wrapper included)
   src/main/java/com/productrag/
     auth/               Users, JWT, login, admin bootstrap
     product/            Product entity, CRUD service/controller, structured filters
+    catalog/            Categories, brands, attribute definitions + value validation, variants
     embedding/          Embedding text builder, pgvector store (JDBC)
     vectorsync/         Transactional outbox, worker, retries, admin API, metrics
     rag/                Question parsing, retrieval strategies, prompt building, RAG service
@@ -132,7 +149,9 @@ backend/                Spring Boot application (Maven Wrapper included)
   src/main/resources/db/migration/   Flyway migrations
 frontend/               React + Vite admin UI
   src/features/chat/    Chat UI: message list, composer, sidebar, Markdown rendering
-scripts/                Sample products and a seeding script (uses the REST API)
+  src/features/catalog/ Shared catalog UI: list/detail building blocks, typed attribute fields, hooks
+  src/pages/catalog/    Category, brand, attribute and variant pages
+scripts/                Seed scripts and fixtures (use the REST API)
 docs/                   Architecture, API, RAG and vector sync documentation
 ```
 
@@ -140,22 +159,8 @@ docs/                   Architecture, API, RAG and vector sync documentation
 
 ## 5. Database setup (PostgreSQL + pgvector)
 
-Products and embeddings live in one PostgreSQL database.
-
-### Option A: Docker (recommended)
-
-`docker-compose.yml` starts `pgvector/pgvector:pg17` with a named volume:
-
-```powershell
-docker compose up -d     # reads DB_NAME, DB_USERNAME, DB_PASSWORD and DB_PORT from .env
-docker compose ps        # wait until the status is "healthy"
-```
-
-The default host port is **5433**, so it doesn't clash with a locally installed PostgreSQL on 5432.
-
-### Option B: an existing local PostgreSQL
-
-Install the pgvector extension into that server, then point `DB_URL` at your database.
+Products and embeddings live in one local PostgreSQL database (default port 5432). Install the pgvector
+extension into that server, then point `DB_URL` at your database.
 
 On Windows, build pgvector from the official source. This needs the Visual Studio C++ Build Tools and must run
 in an **x64 Native Tools Command Prompt opened as Administrator**:
@@ -187,7 +192,7 @@ SELECT extversion FROM pg_extension WHERE extname = 'vector';
 Copy-Item .env.example .env     # then edit .env
 ```
 
-The backend imports `../.env` automatically (`spring.config.import`), Docker Compose reads it, and Vite exposes
+The backend imports `../.env` automatically (`spring.config.import`), and Vite exposes
 only `VITE_*` variables to the browser. Real environment variables override the file.
 
 ### Database and security
@@ -291,22 +296,22 @@ Restart the backend (Flyway resizes the vector column, see [section 14](#14-data
 ### Timeouts and errors
 
 Calls use `AI_CONNECT_TIMEOUT` / `AI_READ_TIMEOUT` and at most 2 attempts per request. Provider errors are mapped
-to `503 AI_PROVIDER_UNAVAILABLE` (temporary) or `502 AI_PROVIDER_ERROR` (rejected, for example an invalid key or
+to `503 AI_PROVIDER_UNREACHABLE` (nothing listens at `OPENAI_BASE_URL`, for example Ollama isn't running),
+`503 AI_PROVIDER_UNAVAILABLE` (temporary) or `502 AI_PROVIDER_ERROR` (rejected, for example an invalid key or
 model). See [section 17](#17-troubleshooting).
 
 ---
 
 ## 8. Running the application
 
-```powershell
-# 1. Database (only for the Docker option)
-docker compose up -d
+Make sure PostgreSQL is running (and Ollama, if you use it), then:
 
-# 2. Backend -> http://localhost:8080
+```powershell
+# 1. Backend -> http://localhost:8080
 cd backend
 .\mvnw.cmd spring-boot:run
 
-# 3. Frontend -> http://localhost:5173 (proxies /api to the backend)
+# 2. Frontend -> http://localhost:5173 (proxies /api to the backend)
 cd frontend
 npm install
 npm run dev
@@ -329,8 +334,35 @@ node scripts/seed-sample-products.mjs
 ```
 
 The script reads `ADMIN_EMAIL` / `ADMIN_PASSWORD` from the environment or `.env` (and prompts if they are
-missing) and creates 20 products (prices in INR) through the REST API. Existing SKUs are skipped. The products are
-validated and indexed exactly like products created in the UI.
+missing) and creates 20 products (prices in INR) through the REST API. Missing categories and brands are created
+first. Existing SKUs are skipped. The products are validated and indexed exactly like products created in the UI.
+
+### Catalog fixtures
+
+```powershell
+node scripts/seed-catalog.mjs                 # asks for confirmation first
+node scripts/seed-catalog.mjs --yes           # no prompt
+node scripts/seed-catalog.mjs --verify-only   # only check that every fixture exists exactly once
+```
+
+Seeds `scripts/catalog-fixtures.json` through the REST API:
+
+- 30 categories (14 top level, 16 subcategories, 4 inactive).
+- 30 brands (3 inactive; official website URLs; no logo URLs, because no official logos are bundled).
+- 30 attributes (2 inactive, 2 required).
+- 30 variants (2 inactive, with sale prices and low/out-of-stock examples) on 10 prerequisite products.
+
+The prerequisite products don't count toward the 30. Credentials are read like the sample-product script, and
+`API_BASE_URL` defaults to `http://localhost:8080/api/v1`.
+
+- **Safety:** only `localhost`, `127.0.0.1` or `::1` targets are accepted.
+- **Idempotent:** records are matched by slug, category + slug, or SKU, and existing ones are reused unchanged.
+  Nothing is updated or deleted, and reruns create no duplicates.
+- **Checked:** the run ends with a verification of counts, parent links and variant-to-product links, and exits
+  with code 1 if anything is missing or failed.
+
+Products created by the seed are embedded like any other product; this needs a running AI provider. If the
+provider is down, the sync events fail and can be retried later from the AI search index panel.
 
 ---
 
@@ -342,8 +374,8 @@ password.
 
 | Role | Can do |
 |------|--------|
-| `ADMIN` | Everything below, plus product changes, vector sync administration and actuator metrics |
-| `USER` | View products and use the chat |
+| `ADMIN` | Everything below, plus product and catalog changes, vector sync administration and actuator metrics |
+| `USER` | View products and catalog records and use the chat |
 
 Additional users can be inserted into `app_users` with a BCrypt hash; a user-management UI is not part of this
 project.
@@ -359,6 +391,9 @@ All endpoints are under `/api/v1`. Full request and response examples: [docs/api
 | `POST /auth/login`, `GET /auth/me` | Sign in (returns a JWT) and current user |
 | `GET /products`, `GET /products/{id}`, `GET /products/categories` | List, search, view |
 | `POST /products`, `PUT /products/{id}`, `PATCH /products/{id}/status`, `DELETE /products/{id}` | Manage products (admin) |
+| `GET/POST /categories`, `GET/PUT/PATCH/DELETE /categories/{id}`, `PATCH /categories/{id}/status`, `GET /categories/options` | Categories |
+| Same pattern for `/brands`, `/product-attributes` and `/product-variants` | Brands, attribute definitions, variants (attributes and variants have no `DELETE`) |
+| `GET /product-attributes/applicable?categoryId=` | Attributes for a category, including inherited ones |
 | `POST /chat` | Ask a question and get the full answer as JSON |
 | `POST /chat/stream` | Ask a question and get the answer word by word as Server-Sent Events (used by the UI) |
 | `GET /chat/conversations`, `GET /chat/conversations/{id}/messages` | Conversation history |
@@ -371,6 +406,7 @@ All endpoints are under `/api/v1`. Full request and response examples: [docs/api
 TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"admin@example.com","password":"<password>"}' | jq -r .accessToken)
 
+# "category"/"brand" must name an existing category/brand; categoryId/brandId (UUIDs) can be sent instead.
 curl -X POST http://localhost:8080/api/v1/products -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"Wireless Headphones","sku":"WH-001","description":"Over-ear, ANC, 30-hour battery",
        "category":"Audio","brand":"SoundWave","price":7999.00,"stockQuantity":25,"attributes":{"color":"black"}}'
@@ -445,6 +481,7 @@ Flyway runs automatically when the backend starts (`backend/src/main/resources/d
 |-----------|--------------|
 | `V1__initial_schema.sql` | Creates the `vector` and `pg_trgm` extensions and the tables `app_users`, `products`, `product_embeddings`, `vector_sync_events`, `chat_conversations` and `chat_messages`, with constraints and indexes. The embedding column is `vector(${embedding_dimensions})`, taken from `EMBEDDING_DIMENSIONS`. |
 | `V2__align_embedding_dimension.sql` | Resizes the embedding column (and removes stored vectors) when the configured dimension changed, for example when switching from OpenAI (1536) to Ollama (768). Does nothing when the dimension already matches. |
+| `V3__catalog_modules.sql` | Creates `categories`, `brands`, `product_attributes` and `product_variants` and adds `category_id` / `brand_id` foreign keys to `products`. For existing products it creates one category per distinct `products.category` value and one brand per distinct `products.brand` value, then links them. The text columns are kept. Nothing is deleted. |
 
 At startup the backend checks that the column dimension matches the configuration and refuses to start if not.
 
@@ -454,7 +491,7 @@ At startup the backend checks that the column dimension matches the configuratio
 
 ```powershell
 cd backend
-.\mvnw.cmd test        # unit + MockMvc tests; Testcontainers tests run only when Docker is available
+.\mvnw.cmd test        # unit + MockMvc tests; the integration test runs only when IT_DB_URL is set (see below)
 
 cd ..\frontend
 npm run lint
@@ -463,16 +500,39 @@ npm run build          # includes the TypeScript type check
 
 - **No test calls a paid AI API.** Unit tests use fakes and mocks; the integration test uses deterministic
   in-process embedding and chat models.
-- **No test touches your database.** The integration test (`ProductRagIntegrationTest`) starts its own throwaway
-  `pgvector/pgvector:pg17` container, and tests ignore the real `.env` (`APP_ENV_FILE` is redirected in `pom.xml`).
-- Latest run on the development machine: 129 backend tests passed; the 13 Testcontainers tests were skipped
-  because Docker was not available.
+- **No test touches your database.** Tests ignore the real `.env` (`APP_ENV_FILE` is redirected in `pom.xml`).
+- **Integration test (opt-in).** `ProductRagIntegrationTest` runs the whole stack (Flyway, pgvector, outbox,
+  chat) against a local PostgreSQL database. It is skipped unless `IT_DB_URL` points to a `localhost` database
+  whose name ends in `_test`; it **deletes all rows** in that database, so never point it at real data.
+
+  ```powershell
+  # once, as a PostgreSQL superuser:  CREATE DATABASE ragdb_it_test;
+  $env:IT_DB_URL = 'jdbc:postgresql://localhost:5432/ragdb_it_test'
+  $env:IT_DB_USERNAME = 'postgres'
+  $env:IT_DB_PASSWORD = '<password>'
+  .\mvnw.cmd test
+  ```
+
+- Without `IT_DB_URL`: 202 backend tests run, 0 failures, 13 integration tests skipped. There are no frontend
+  unit tests; lint and the production build pass.
 
 Coverage includes product CRUD, validation and duplicate SKUs, JWT and role-based access (401/403), outbox
 creation, skipping unchanged embeddings, retries/backoff/permanent failures, stale lease recovery, idempotent
 re-processing, deletion cleanup, query intent parsing, retrieval strategies and relevance filtering,
 prompt-injection delimiting, no-results without LLM, AI provider failures, chat streaming (event order, errors,
 partial answers), and conversation isolation between users.
+
+Catalog coverage includes:
+
+- Duplicate names and slugs; parent cycles and inactive parents.
+- Blocked deletes for categories and brands that are in use.
+- Attribute options, slug clashes in a hierarchy, and value type checks; inherited, required and inactive
+  attributes.
+- Variant SKU clashes with products, `salePrice < price`, and stock levels.
+- Inactive categories and brands kept on existing products but not newly assignable.
+- Admin-only writes on every catalog endpoint.
+- `CatalogFixturesTest`, which validates `scripts/catalog-fixtures.json` (30 per module, valid relationships and
+  attribute values) against the real request DTOs and validators.
 
 ---
 
@@ -506,7 +566,7 @@ FROM vector_sync_events WHERE status = 'FAILED' ORDER BY updated_at DESC;
 | Backend exits: `ADMIN_PASSWORD still contains the placeholder` | Replace the `replace-with…` value from `.env.example`. |
 | `Port 8080 was already in use` | Another backend is still running. Stop it (Ctrl+C in its terminal) before starting a new one. |
 | `Found non-empty schema(s) "public" but no schema history table` | Use an empty database or schema for this application. |
-| `Connection refused` to PostgreSQL | Check the `DB_URL` port (Docker default 5433), `docker compose ps` and the credentials. |
+| `Connection refused` to PostgreSQL | Check that the PostgreSQL service is running (Windows: `Get-Service postgresql*`), the `DB_URL` port (default 5432) and the credentials. |
 | `ERROR: extension "vector" is not available` | pgvector isn't installed in this PostgreSQL server ([section 5](#5-database-setup-postgresql--pgvector)). |
 | `permission denied to create extension "vector"` | Run `CREATE EXTENSION vector;` once as a superuser, then restart the backend. |
 
@@ -528,7 +588,8 @@ FROM vector_sync_events WHERE status = 'FAILED' ORDER BY updated_at DESC;
 |------------------|---------------|
 | Products stay "Pending" | No AI provider configured, worker disabled (`VECTOR_SYNC_ENABLED`), or the provider is down; see the AI search index panel. |
 | `503 AI_PROVIDER_NOT_CONFIGURED` | `OPENAI_API_KEY` is missing; set it and restart. |
-| `503 AI_PROVIDER_UNAVAILABLE` | Timeout, network error, HTTP 429 or 5xx from the provider (or Ollama isn't running); retry later. Sync retries automatically. |
+| `503 AI_PROVIDER_UNREACHABLE` (log: `I/O error on POST request for "http://localhost:11434/..."`) | Nothing is listening at `OPENAI_BASE_URL`. Start Ollama (Start menu, or `ollama serve`), check with `ollama list`, then use **Retry all failed**. Sync also retries automatically. |
+| `503 AI_PROVIDER_UNAVAILABLE` | Timeout, HTTP 429 or 5xx from the provider; retry later. Sync retries automatically. |
 | `502 AI_PROVIDER_ERROR` | The provider rejected the request (invalid key, unknown model). Fix the configuration; sync marks it permanent. |
 | `502 AI_PROVIDER_QUOTA_EXCEEDED` | OpenAI returned `429 insufficient_quota` (no credits). Add credits, then use **Retry all failed** on the Products page. Not retried automatically. |
 | Startup: embedding column has N dimensions but `EMBEDDING_DIMENSIONS` is M | The model or dimension changed; follow the re-embedding procedure in [docs/vector-sync.md](docs/vector-sync.md). |
@@ -554,5 +615,4 @@ FROM vector_sync_events WHERE status = 'FAILED' ORDER BY updated_at DESC;
 > Redis or gateway limits); token revocation/refresh and an httpOnly-cookie or BFF session model instead of
 > `sessionStorage`; user management and password policies; secret management (vault/KMS); database backups; an
 > HNSW index once the catalog grows (see the docs); centralized logging and alerting on the sync metrics; load
-> testing; and running the Testcontainers integration tests in CI (they were not executed on the development
-> machine because Docker was unavailable).
+> testing; and running the integration test in CI against a dedicated `*_test` database.

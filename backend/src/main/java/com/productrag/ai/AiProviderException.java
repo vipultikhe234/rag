@@ -24,6 +24,12 @@ public class AiProviderException extends ApiException {
                 "The AI provider is temporarily unavailable or timed out. Please try again shortly.", true, cause);
     }
 
+    public static AiProviderException unreachable(Throwable cause) {
+        return new AiProviderException(HttpStatus.SERVICE_UNAVAILABLE, "AI_PROVIDER_UNREACHABLE",
+                "The AI provider could not be reached. If you use Ollama, make sure it is running "
+                        + "(ollama serve) and that OPENAI_BASE_URL points to it.", true, cause);
+    }
+
     public static AiProviderException rejected(Throwable cause) {
         return new AiProviderException(HttpStatus.BAD_GATEWAY, "AI_PROVIDER_ERROR",
                 "The AI provider rejected the request. Check the API key, model names and account limits.", false,

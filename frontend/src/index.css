@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 
+/* Scrolling still works with the wheel, touch and keyboard; only the bar is hidden. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   html {
     font-family:
