@@ -1,4 +1,4 @@
-# Product RAG Admin Panel
+# Product and varient RAG Admin Panel
 
 A full-stack admin panel for managing a product catalog and chatting with it in plain language.
 
