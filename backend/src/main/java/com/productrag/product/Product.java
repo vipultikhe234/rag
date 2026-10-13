@@ -33,6 +33,16 @@ public class Product {
     @Column(nullable = false, length = 64, unique = true)
     private String sku;
 
+    @Column(nullable = false, length = 220, unique = true)
+    private String slug;
+
+    /**
+     * Variant products sell only through their variants; {@link #price} and {@link #stockQuantity} then hold a
+     * read-only summary (lowest active variant price, total active variant stock).
+     */
+    @Column(name = "has_variants", nullable = false)
+    private boolean hasVariants;
+
     @Column(nullable = false, columnDefinition = "text")
     private String description;
 
@@ -87,6 +97,22 @@ public class Product {
 
     public String getName() {
         return name;
+    }
+
+    public String getSlug() {
+        return slug;
+    }
+
+    public void setSlug(String slug) {
+        this.slug = slug;
+    }
+
+    public boolean hasVariants() {
+        return hasVariants;
+    }
+
+    public void setHasVariants(boolean hasVariants) {
+        this.hasVariants = hasVariants;
     }
 
     public void setName(String name) {

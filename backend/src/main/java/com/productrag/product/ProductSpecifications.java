@@ -1,7 +1,14 @@
 package com.productrag.product;
 
+import com.productrag.catalog.CatalogStatus;
+import com.productrag.catalog.variant.ProductVariant;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.data.jpa.domain.Specification;
@@ -16,14 +23,46 @@ public final class ProductSpecifications {
         return (root, query, cb) -> cb.conjunction();
     }
 
-    /** Case-insensitive "contains" search over name, SKU, category and brand. */
+    /** Case-insensitive "contains" search over name, SKU, slug, category and brand. */
     public static Specification<Product> textSearch(String text) {
         String pattern = "%" + escapeLike(text.trim().toLowerCase(Locale.ROOT)) + "%";
         return (root, query, cb) -> cb.or(
                 cb.like(cb.lower(root.get("name")), pattern, '\\'),
                 cb.like(cb.lower(root.get("sku")), pattern, '\\'),
+                cb.like(root.get("slug"), pattern, '\\'),
                 cb.like(cb.lower(root.get("category")), pattern, '\\'),
                 cb.like(cb.lower(root.get("brand")), pattern, '\\'));
+    }
+
+    public static Specification<Product> hasVariantsEquals(boolean hasVariants) {
+        return (root, query, cb) -> cb.equal(root.get("hasVariants"), hasVariants);
+    }
+
+    /**
+     * Sellable price within [min, max] (either bound optional): the product price for simple products, any active
+     * variant's price for variant products.
+     */
+    public static Specification<Product> sellablePriceBetween(BigDecimal min, BigDecimal max) {
+        return (root, query, cb) -> {
+            Subquery<Integer> variants = query.subquery(Integer.class);
+            Root<ProductVariant> variant = variants.from(ProductVariant.class);
+            List<Predicate> variantConditions = new ArrayList<>(List.of(
+                    cb.equal(variant.get("product").get("id"), root.get("id")),
+                    cb.equal(variant.get("status"), CatalogStatus.ACTIVE)));
+            List<Predicate> simpleConditions = new ArrayList<>(List.of(cb.isFalse(root.get("hasVariants"))));
+            if (min != null) {
+                variantConditions.add(cb.greaterThanOrEqualTo(variant.get("price"), min));
+                simpleConditions.add(cb.greaterThanOrEqualTo(root.get("price"), min));
+            }
+            if (max != null) {
+                variantConditions.add(cb.lessThanOrEqualTo(variant.get("price"), max));
+                simpleConditions.add(cb.lessThanOrEqualTo(root.get("price"), max));
+            }
+            variants.select(cb.literal(1)).where(variantConditions.toArray(Predicate[]::new));
+            return cb.or(
+                    cb.and(simpleConditions.toArray(Predicate[]::new)),
+                    cb.and(cb.isTrue(root.get("hasVariants")), cb.exists(variants)));
+        };
     }
 
     public static Specification<Product> categoryEquals(String category) {

@@ -132,7 +132,27 @@ public class GlobalExceptionHandler {
         }
         if (detail.contains("uq_product_attributes_")) {
             return error(HttpStatus.CONFLICT, "ATTRIBUTE_ALREADY_EXISTS",
-                    "This category already has an attribute with this name or slug", request);
+                    "An attribute with this name or slug already exists", request);
+        }
+        if (detail.contains("uq_products_slug")) {
+            return error(HttpStatus.CONFLICT, "SLUG_ALREADY_EXISTS", "Another product already uses this slug",
+                    request);
+        }
+        if (detail.contains("uq_product_variants_option_signature")) {
+            return error(HttpStatus.CONFLICT, "VARIANT_COMBINATION_EXISTS",
+                    "A variant with these options already exists for this product", request);
+        }
+        if (detail.contains("uq_product_variants_barcode")) {
+            return error(HttpStatus.CONFLICT, "BARCODE_ALREADY_EXISTS", "Another variant already uses this barcode",
+                    request);
+        }
+        if (detail.contains("uq_product_options_") || detail.contains("uq_product_option_values_")) {
+            return error(HttpStatus.CONFLICT, "OPTION_ALREADY_EXISTS",
+                    "This product already has an option or option value with this name", request);
+        }
+        if (detail.contains("uq_product_images_")) {
+            return error(HttpStatus.CONFLICT, "IMAGE_ALREADY_EXISTS", "This product already has an image with this URL",
+                    request);
         }
         if (detail.contains("foreign key")) {
             return error(HttpStatus.CONFLICT, "RECORD_IN_USE",

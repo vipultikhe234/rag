@@ -1,6 +1,9 @@
 package com.productrag.product;
 
 import com.productrag.catalog.Slugs;
+import com.productrag.catalog.variant.StockFilter;
+import com.productrag.catalog.variant.dto.ProductVariantResponse;
+import com.productrag.catalog.variant.dto.VariantBatchRequest;
 import com.productrag.common.api.PageRequests;
 import com.productrag.common.api.PageResponse;
 import com.productrag.common.exception.BadRequestException;
@@ -8,13 +11,16 @@ import com.productrag.product.dto.ProductRequest;
 import com.productrag.product.dto.ProductResponse;
 import com.productrag.product.dto.ProductStatusRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -38,6 +44,7 @@ public class ProductController {
     private static final Map<String, String> SORTABLE = Map.of(
             "name", "name",
             "sku", "sku",
+            "slug", "slug",
             "category", "category",
             "brand", "brand",
             "price", "price",
@@ -68,12 +75,31 @@ public class ProductController {
             @RequestParam(required = false) ProductStatus status,
             @RequestParam(required = false) @Size(max = 10, message = "At most 10 attribute filters are allowed")
             List<String> attr,
+            @RequestParam(required = false) @DecimalMin(value = "0", message = "minPrice must not be negative")
+            BigDecimal minPrice,
+            @RequestParam(required = false) @DecimalMin(value = "0", message = "maxPrice must not be negative")
+            BigDecimal maxPrice,
+            @RequestParam(required = false) StockFilter stock,
+            @RequestParam(required = false) Boolean hasVariants,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort) {
         ProductListQuery query = new ProductListQuery(q, category, categoryId, brandId, status,
-                attributeFilters(attr));
+                attributeFilters(attr), minPrice, maxPrice, stock, hasVariants);
         return productService.list(query, pageRequest(page, size, sort));
+    }
+
+    @GetMapping("/{id}/variants")
+    public List<ProductVariantResponse> variants(@PathVariable UUID id) {
+        return productService.variants(id);
+    }
+
+    /** Adds variants to an existing variant product in one transaction (all or nothing). */
+    @PostMapping("/{id}/variants")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ProductVariantResponse>> addVariants(@PathVariable UUID id,
+                                                                    @Valid @RequestBody VariantBatchRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(productService.addVariants(id, request.variants()));
     }
 
     /** Parses repeated {@code attr=slug:value} parameters. */

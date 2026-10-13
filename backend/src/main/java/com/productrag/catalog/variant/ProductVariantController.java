@@ -6,11 +6,14 @@ import com.productrag.catalog.variant.dto.ProductVariantRequest;
 import com.productrag.catalog.variant.dto.ProductVariantResponse;
 import com.productrag.common.api.PageRequests;
 import com.productrag.common.api.PageResponse;
+import com.productrag.common.exception.BadRequestException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -57,11 +60,36 @@ public class ProductVariantController {
             @RequestParam(required = false) @DecimalMin("0") BigDecimal minPrice,
             @RequestParam(required = false) @DecimalMin("0") BigDecimal maxPrice,
             @RequestParam(required = false) StockFilter stock,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) UUID brandId,
+            @RequestParam(required = false) @Size(max = 5, message = "At most 5 option filters are allowed")
+            List<String> option,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort) {
-        return variantService.list(q, productId, sku, status, minPrice, maxPrice, stock,
-                PageRequests.of(page, size, sort, SORTABLE));
+        VariantListQuery query = new VariantListQuery(q, productId, sku, status, minPrice, maxPrice, stock, categoryId,
+                brandId, optionFilters(option));
+        return variantService.list(query, PageRequests.of(page, size, sort, SORTABLE));
+    }
+
+    /** Parses repeated {@code option=Name:Value} parameters (e.g. option=Color:Black). */
+    static Map<String, String> optionFilters(List<String> params) {
+        if (params == null || params.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> filters = new LinkedHashMap<>();
+        for (String param : params) {
+            int colon = param.indexOf(':');
+            String name = colon > 0 ? param.substring(0, colon).trim() : "";
+            String value = colon > 0 ? param.substring(colon + 1).trim() : "";
+            if (name.isEmpty() || name.length() > 50 || value.isEmpty() || value.length() > 100) {
+                throw new BadRequestException("INVALID_PARAMETER",
+                        "Option filters must look like option=Name:Value (name of 1-50 characters, value of 1-100 "
+                                + "characters)");
+            }
+            filters.put(name, value);
+        }
+        return filters;
     }
 
     @GetMapping("/{id}")

@@ -1,11 +1,18 @@
 package com.productrag.catalog.variant;
 
 import static com.productrag.catalog.CatalogText.checkVersion;
+import static com.productrag.catalog.CatalogText.trimToNull;
 
 import com.productrag.catalog.CatalogStatus;
 import com.productrag.catalog.attribute.AttributeValueValidator;
+import com.productrag.catalog.category.Category;
+import com.productrag.catalog.category.CategoryRepository;
+import com.productrag.catalog.option.ProductOptionService;
+import com.productrag.catalog.option.ProductOptionService.Combination;
+import com.productrag.catalog.option.dto.SelectedOption;
 import com.productrag.catalog.variant.dto.ProductVariantRequest;
 import com.productrag.catalog.variant.dto.ProductVariantResponse;
+import com.productrag.catalog.variant.dto.VariantDraft;
 import com.productrag.common.api.PageResponse;
 import com.productrag.common.exception.BadRequestException;
 import com.productrag.common.exception.ConflictException;
@@ -14,11 +21,20 @@ import com.productrag.common.exception.NotFoundException;
 import com.productrag.config.AppProperties;
 import com.productrag.product.Product;
 import com.productrag.product.ProductRepository;
+import com.productrag.product.image.ProductImage;
+import com.productrag.product.image.ProductImageResponse;
+import com.productrag.product.image.ProductImageService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,105 +43,315 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Product variants (size/colour/storage options with their own SKU, price and stock). Variants are deactivated
- * rather than deleted so order history and other references keep resolving.
+ * Product variants: one sellable combination of the product's option values with its own SKU, price and stock.
+ * Variants are deactivated rather than deleted so order history and other references keep resolving. Every write
+ * locks the parent product row, so combination checks and the product's price/stock summary stay consistent.
  */
 @Service
 public class ProductVariantService {
 
+    public static final int MAX_VARIANTS_PER_PRODUCT = 100;
+    static final int MAX_OPTION_FILTERS = 5;
+
     private final ProductVariantRepository variantRepository;
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
     private final AttributeValueValidator attributeValueValidator;
+    private final ProductOptionService optionService;
+    private final ProductImageService imageService;
     private final int lowStockThreshold;
 
     public ProductVariantService(ProductVariantRepository variantRepository, ProductRepository productRepository,
-                                 AttributeValueValidator attributeValueValidator, AppProperties properties) {
+                                 CategoryRepository categoryRepository, AttributeValueValidator attributeValueValidator,
+                                 ProductOptionService optionService, ProductImageService imageService,
+                                 AppProperties properties) {
         this.variantRepository = variantRepository;
         this.productRepository = productRepository;
+        this.categoryRepository = categoryRepository;
         this.attributeValueValidator = attributeValueValidator;
+        this.optionService = optionService;
+        this.imageService = imageService;
         this.lowStockThreshold = properties.products().lowStockThreshold();
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ProductVariantResponse> list(String search, UUID productId, String sku, CatalogStatus status,
-                                                     BigDecimal minPrice, BigDecimal maxPrice, StockFilter stock,
-                                                     Pageable pageable) {
-        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+    public PageResponse<ProductVariantResponse> list(VariantListQuery query, Pageable pageable) {
+        if (query.minPrice() != null && query.maxPrice() != null && query.minPrice().compareTo(query.maxPrice()) > 0) {
             throw new BadRequestException("INVALID_PARAMETER", "minPrice must not be greater than maxPrice");
         }
+        if (query.options().size() > MAX_OPTION_FILTERS) {
+            throw new BadRequestException("INVALID_PARAMETER",
+                    "At most " + MAX_OPTION_FILTERS + " option filters are allowed");
+        }
         Specification<ProductVariant> spec = ProductVariantSpecifications.all();
-        if (search != null && !search.isBlank()) {
-            spec = spec.and(ProductVariantSpecifications.textSearch(search));
+        if (query.search() != null && !query.search().isBlank()) {
+            spec = spec.and(ProductVariantSpecifications.textSearch(query.search()));
         }
-        if (productId != null) {
-            spec = spec.and(ProductVariantSpecifications.productEquals(productId));
+        if (query.productId() != null) {
+            spec = spec.and(ProductVariantSpecifications.productEquals(query.productId()));
         }
-        if (sku != null && !sku.isBlank()) {
-            spec = spec.and(ProductVariantSpecifications.skuContains(sku));
+        if (query.sku() != null && !query.sku().isBlank()) {
+            spec = spec.and(ProductVariantSpecifications.skuContains(query.sku()));
         }
-        if (status != null) {
-            spec = spec.and(ProductVariantSpecifications.statusEquals(status));
+        if (query.categoryId() != null) {
+            spec = spec.and(ProductVariantSpecifications.productCategoryIn(categoryWithDescendants(query.categoryId())));
         }
-        if (minPrice != null) {
-            spec = spec.and(ProductVariantSpecifications.priceAtLeast(minPrice));
+        if (query.brandId() != null) {
+            spec = spec.and(ProductVariantSpecifications.productBrandEquals(query.brandId()));
         }
-        if (maxPrice != null) {
-            spec = spec.and(ProductVariantSpecifications.priceAtMost(maxPrice));
+        if (query.status() != null) {
+            spec = spec.and(ProductVariantSpecifications.statusEquals(query.status()));
         }
-        if (stock != null) {
-            spec = spec.and(switch (stock) {
+        if (query.minPrice() != null) {
+            spec = spec.and(ProductVariantSpecifications.priceAtLeast(query.minPrice()));
+        }
+        if (query.maxPrice() != null) {
+            spec = spec.and(ProductVariantSpecifications.priceAtMost(query.maxPrice()));
+        }
+        if (query.stock() != null) {
+            spec = spec.and(switch (query.stock()) {
                 case AVAILABLE -> ProductVariantSpecifications.available();
                 case IN_STOCK -> ProductVariantSpecifications.stockLevel(StockLevel.IN_STOCK, lowStockThreshold);
                 case LOW_STOCK -> ProductVariantSpecifications.stockLevel(StockLevel.LOW_STOCK, lowStockThreshold);
                 case OUT_OF_STOCK -> ProductVariantSpecifications.stockLevel(StockLevel.OUT_OF_STOCK, lowStockThreshold);
             });
         }
+        for (Map.Entry<String, String> option : query.options().entrySet()) {
+            spec = spec.and(ProductVariantSpecifications.optionEquals(option.getKey(), option.getValue()));
+        }
         Page<ProductVariant> page = variantRepository.findAll(spec, pageable);
-        return PageResponse.of(page, page.getContent().stream()
-                .map(v -> ProductVariantResponse.from(v, lowStockThreshold)).toList());
+        return PageResponse.of(page, toResponses(page.getContent()));
     }
 
     @Transactional(readOnly = true)
     public ProductVariantResponse get(UUID id) {
-        return ProductVariantResponse.from(find(id), lowStockThreshold);
+        return toResponses(List.of(find(id))).get(0);
+    }
+
+    /** All variants of one product, oldest first (the Variants tab of Product Details). */
+    @Transactional(readOnly = true)
+    public List<ProductVariantResponse> listForProduct(UUID productId) {
+        if (!productRepository.existsById(productId)) {
+            throw productNotFound(productId);
+        }
+        return toResponses(variantRepository.findAllByProductIdOrderByCreatedAtAscIdAsc(productId));
     }
 
     @Transactional
     public ProductVariantResponse create(ProductVariantRequest request) {
-        String sku = normalizeSku(request.sku());
-        if (variantRepository.existsBySku(sku) || productRepository.existsBySku(sku)) {
-            throw skuConflict(sku);
+        Product product = productRepository.findByIdForUpdate(request.productId())
+                .orElseThrow(() -> FieldValidationException.of("productId", "Product does not exist"));
+        requireVariantProduct(product, "productId");
+        List<ProductVariant> created = createAll(product, List.of(request.toDraft()), "");
+        productRepository.refreshVariantSummary(product.getId());
+        return toResponses(created).get(0);
+    }
+
+    /** Adds several variants to one product in a single transaction (all or nothing). */
+    @Transactional
+    public List<ProductVariantResponse> createForProduct(UUID productId, List<VariantDraft> drafts) {
+        Product product = productRepository.findByIdForUpdate(productId)
+                .orElseThrow(() -> productNotFound(productId));
+        requireVariantProduct(product, "variants");
+        if (drafts == null || drafts.isEmpty()) {
+            throw FieldValidationException.of("variants", "Add at least one variant");
         }
-        ProductVariant variant = new ProductVariant();
-        apply(variant, request, sku);
-        variant.setStatus(request.status() == null ? CatalogStatus.ACTIVE : request.status());
-        return ProductVariantResponse.from(variantRepository.saveAndFlush(variant), lowStockThreshold);
+        List<ProductVariant> created = createAll(product, drafts, "variants");
+        productRepository.refreshVariantSummary(product.getId());
+        return toResponses(created);
+    }
+
+    /**
+     * Inserts new variants for a product the caller has locked (or just created). Field errors are reported as
+     * {@code <fieldPrefix>[i].<field>}, or as plain field names when the prefix is empty (single create).
+     * Does not refresh the product summary.
+     */
+    @Transactional
+    public List<ProductVariant> createAll(Product product, List<VariantDraft> drafts, String fieldPrefix) {
+        if (drafts == null || drafts.isEmpty()) {
+            return List.of();
+        }
+        long existing = variantRepository.countByProductId(product.getId());
+        if (existing + drafts.size() > MAX_VARIANTS_PER_PRODUCT) {
+            throw FieldValidationException.of(fieldPrefix.isEmpty() ? "productId" : fieldPrefix,
+                    "A product can have at most " + MAX_VARIANTS_PER_PRODUCT + " variants (it has " + existing + ")");
+        }
+        List<ProductImage> images = imageService.images(product.getId());
+        Set<String> skus = new HashSet<>();
+        Set<String> barcodes = new HashSet<>();
+        Set<String> signatures = new HashSet<>();
+        List<ProductVariant> created = new ArrayList<>();
+        for (int i = 0; i < drafts.size(); i++) {
+            VariantDraft draft = drafts.get(i);
+            String sku = normalizeSku(draft.sku());
+            if (!skus.add(sku)) {
+                throw FieldValidationException.of(field(fieldPrefix, i, "sku"),
+                        "SKU '" + sku + "' is used by more than one variant in this request");
+            }
+            if (variantRepository.existsBySku(sku) || productRepository.existsBySku(sku)) {
+                throw skuConflict(sku);
+            }
+            Combination combination = optionService.resolve(product.getId(), draft.options(),
+                    field(fieldPrefix, i, "options"));
+            if (!signatures.add(combination.signature())) {
+                throw FieldValidationException.of(field(fieldPrefix, i, "options"),
+                        "The combination '" + combination.title() + "' is listed more than once");
+            }
+            if (variantRepository.existsByProductIdAndOptionSignature(product.getId(), combination.signature())) {
+                throw combinationConflict(combination);
+            }
+            String barcode = trimToNull(draft.barcode());
+            if (barcode != null) {
+                if (!barcodes.add(barcode)) {
+                    throw FieldValidationException.of(field(fieldPrefix, i, "barcode"),
+                            "Barcode '" + barcode + "' is used by more than one variant in this request");
+                }
+                if (variantRepository.existsByBarcode(barcode)) {
+                    throw barcodeConflict(barcode);
+                }
+            }
+            ProductVariant variant = new ProductVariant();
+            variant.setProduct(product);
+            apply(variant, product, draft, sku, barcode, combination, images, Map.of(), fieldPrefix, i);
+            variant.setStatus(draft.status() == null ? CatalogStatus.ACTIVE : draft.status());
+            variant = variantRepository.saveAndFlush(variant);
+            optionService.assign(variant.getId(), product.getId(), combination);
+            created.add(variant);
+        }
+        return created;
     }
 
     @Transactional
     public ProductVariantResponse update(UUID id, ProductVariantRequest request) {
         ProductVariant variant = find(id);
+        Product product = lockProduct(variant.getProduct().getId());
         checkVersion(request.version(), variant.getVersion(), "variant");
+        if (request.productId() != null && !request.productId().equals(product.getId())) {
+            throw FieldValidationException.of("productId", "A variant cannot be moved to another product");
+        }
         String sku = normalizeSku(request.sku());
         if (!sku.equals(variant.getSku())
                 && (variantRepository.existsBySkuAndIdNot(sku, id) || productRepository.existsBySku(sku))) {
             throw skuConflict(sku);
         }
-        apply(variant, request, sku);
+        Combination combination = optionService.resolve(product.getId(), request.options(), "options");
+        if (variantRepository.existsByProductIdAndOptionSignatureAndIdNot(product.getId(), combination.signature(),
+                id)) {
+            throw combinationConflict(combination);
+        }
+        String barcode = trimToNull(request.barcode());
+        if (barcode != null && variantRepository.existsByBarcodeAndIdNot(barcode, id)) {
+            throw barcodeConflict(barcode);
+        }
+        apply(variant, product, request.toDraft(), sku, barcode, combination, imageService.images(product.getId()),
+                variant.getAttributes(), "", 0);
         if (request.status() != null) {
             variant.setStatus(request.status());
         }
-        return ProductVariantResponse.from(variantRepository.saveAndFlush(variant), lowStockThreshold);
+        variantRepository.saveAndFlush(variant);
+        optionService.assign(variant.getId(), product.getId(), combination);
+        productRepository.refreshVariantSummary(product.getId());
+        return toResponses(List.of(variant)).get(0);
     }
 
     @Transactional
     public ProductVariantResponse changeStatus(UUID id, CatalogStatus status) {
         ProductVariant variant = find(id);
         if (variant.getStatus() != status) {
+            lockProduct(variant.getProduct().getId());
             variant.setStatus(status);
             variantRepository.saveAndFlush(variant);
+            productRepository.refreshVariantSummary(variant.getProduct().getId());
         }
-        return ProductVariantResponse.from(variant, lowStockThreshold);
+        return toResponses(List.of(variant)).get(0);
+    }
+
+    /** Responses with option selections and image URLs loaded in batches (no per-row queries). */
+    public List<ProductVariantResponse> toResponses(List<ProductVariant> variants) {
+        if (variants.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<SelectedOption>> selections =
+                optionService.selectionsByVariant(variants.stream().map(ProductVariant::getId).toList());
+        Map<UUID, ProductImageResponse> images = imageService.byIds(
+                variants.stream().map(ProductVariant::getImageId).filter(Objects::nonNull).distinct().toList());
+        return variants.stream().map(v -> {
+            ProductImageResponse image = v.getImageId() == null ? null : images.get(v.getImageId());
+            return ProductVariantResponse.from(v, selections.getOrDefault(v.getId(), List.of()),
+                    image == null ? null : image.url(), lowStockThreshold);
+        }).toList();
+    }
+
+    private void apply(ProductVariant variant, Product product, VariantDraft draft, String sku, String barcode,
+                       Combination combination, List<ProductImage> images, Map<String, Object> previousAttributes,
+                       String fieldPrefix, int index) {
+        BigDecimal price = draft.price().setScale(2, RoundingMode.UNNECESSARY);
+        BigDecimal compareAtPrice = draft.compareAtPrice() == null ? null
+                : draft.compareAtPrice().setScale(2, RoundingMode.UNNECESSARY);
+        if (compareAtPrice != null && compareAtPrice.compareTo(price) <= 0) {
+            throw FieldValidationException.of(field(fieldPrefix, index, "compareAtPrice"),
+                    "Compare-at price must be higher than the price");
+        }
+        Map<String, Object> attributes = cleanAttributes(draft.attributes());
+        if (product.getCategoryId() != null) {
+            attributes = attributeValueValidator.validate(product.getCategoryId(), attributes, previousAttributes,
+                    false);
+        }
+        variant.setSku(sku);
+        variant.setVariantName(combination.title());
+        variant.setOptionSignature(combination.signature());
+        variant.setAttributes(attributes);
+        variant.setPrice(price);
+        variant.setCompareAtPrice(compareAtPrice);
+        variant.setStockQuantity(draft.stockQuantity());
+        variant.setBarcode(barcode);
+        variant.setImageId(resolveImage(images, draft.imageId(), draft.imageUrl(),
+                field(fieldPrefix, index, draft.imageId() != null ? "imageId" : "imageUrl")));
+    }
+
+    private static UUID resolveImage(List<ProductImage> images, UUID imageId, String imageUrl, String field) {
+        if (imageId != null) {
+            return images.stream().filter(img -> img.getId().equals(imageId)).findFirst()
+                    .map(ProductImage::getId)
+                    .orElseThrow(() -> FieldValidationException.of(field, "Image must be one of the product's images"));
+        }
+        String url = trimToNull(imageUrl);
+        if (url == null) {
+            return null;
+        }
+        return images.stream().filter(img -> img.getUrl().equals(url)).findFirst()
+                .map(ProductImage::getId)
+                .orElseThrow(() -> FieldValidationException.of(field, "Image must be one of the product's images"));
+    }
+
+    private Collection<UUID> categoryWithDescendants(UUID categoryId) {
+        List<Category> all = categoryRepository.findAll();
+        Map<UUID, List<UUID>> children = new LinkedHashMap<>();
+        all.forEach(c -> {
+            if (c.getParentId() != null) {
+                children.computeIfAbsent(c.getParentId(), k -> new ArrayList<>()).add(c.getId());
+            }
+        });
+        Set<UUID> result = new HashSet<>();
+        List<UUID> queue = new ArrayList<>(List.of(categoryId));
+        while (!queue.isEmpty()) {
+            UUID current = queue.remove(queue.size() - 1);
+            if (result.add(current)) {
+                queue.addAll(children.getOrDefault(current, List.of()));
+            }
+        }
+        return result;
+    }
+
+    private Product lockProduct(UUID productId) {
+        return productRepository.findByIdForUpdate(productId).orElseThrow(() -> productNotFound(productId));
+    }
+
+    private static void requireVariantProduct(Product product, String field) {
+        if (!product.hasVariants()) {
+            throw FieldValidationException.of(field, "Product '" + product.getName()
+                    + "' is a simple product. Turn on variants for it before adding variants.");
+        }
     }
 
     private ProductVariant find(UUID id) {
@@ -133,31 +359,8 @@ public class ProductVariantService {
                 .orElseThrow(() -> new NotFoundException("VARIANT_NOT_FOUND", "Variant " + id + " was not found"));
     }
 
-    private void apply(ProductVariant variant, ProductVariantRequest request, String sku) {
-        Product product = productRepository.findById(request.productId())
-                .orElseThrow(() -> FieldValidationException.of("productId", "Product does not exist"));
-        boolean productChanged = variant.getProduct() == null || !product.getId().equals(variant.getProduct().getId());
-        if (productChanged && !product.isActive()) {
-            throw FieldValidationException.of("productId", "Variants cannot be added to an inactive product");
-        }
-        BigDecimal price = request.price().setScale(2, RoundingMode.UNNECESSARY);
-        BigDecimal salePrice = request.salePrice() == null ? null
-                : request.salePrice().setScale(2, RoundingMode.UNNECESSARY);
-        if (salePrice != null && salePrice.compareTo(price) >= 0) {
-            throw FieldValidationException.of("salePrice", "Sale price must be lower than the price");
-        }
-        Map<String, Object> attributes = cleanAttributes(request.attributes());
-        if (product.getCategoryId() != null) {
-            Map<String, Object> previous = productChanged ? Map.of() : variant.getAttributes();
-            attributes = attributeValueValidator.validate(product.getCategoryId(), attributes, previous, false);
-        }
-        variant.setProduct(product);
-        variant.setSku(sku);
-        variant.setVariantName(request.variantName().trim());
-        variant.setAttributes(attributes);
-        variant.setPrice(price);
-        variant.setSalePrice(salePrice);
-        variant.setStockQuantity(request.stockQuantity());
+    private static String field(String prefix, int index, String name) {
+        return prefix.isEmpty() ? name : prefix + "[" + index + "]." + name;
     }
 
     private static Map<String, Object> cleanAttributes(Map<String, Object> attributes) {
@@ -176,8 +379,22 @@ public class ProductVariantService {
         return sku.trim().toUpperCase(Locale.ROOT);
     }
 
+    private static NotFoundException productNotFound(UUID productId) {
+        return new NotFoundException("PRODUCT_NOT_FOUND", "Product " + productId + " was not found");
+    }
+
     private static ConflictException skuConflict(String sku) {
         return new ConflictException("SKU_ALREADY_EXISTS",
                 "SKU '" + sku + "' is already used by another product or variant");
+    }
+
+    private static ConflictException barcodeConflict(String barcode) {
+        return new ConflictException("BARCODE_ALREADY_EXISTS",
+                "Barcode '" + barcode + "' is already used by another variant");
+    }
+
+    private static ConflictException combinationConflict(Combination combination) {
+        return new ConflictException("VARIANT_COMBINATION_EXISTS",
+                "A variant with the options '" + combination.title() + "' already exists for this product");
     }
 }

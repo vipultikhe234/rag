@@ -3,6 +3,7 @@ package com.productrag.catalog.category;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,7 @@ import com.productrag.product.ProductStatus;
 import com.productrag.product.ProductTestData;
 import com.productrag.vectorsync.VectorSyncEventType;
 import com.productrag.vectorsync.VectorSyncOutbox;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +51,26 @@ class CategoryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CategoryService(categoryRepository, productRepository, attributeRepository, outbox);
+        service = new CategoryService(categoryRepository, productRepository, attributeRepository, outbox,
+                new CategoryAssignability(categoryRepository));
+        lenient().when(categoryRepository.findSelfAndAncestorIds(any())).thenAnswer(invocation -> {
+            List<UUID> chain = new ArrayList<>();
+            Category current = store.get(invocation.<UUID>getArgument(0));
+            while (current != null) {
+                chain.add(current.getId());
+                current = current.getParentId() == null ? null : store.get(current.getParentId());
+            }
+            return chain;
+        });
+        lenient().when(categoryRepository.findAllById(anyIterable())).thenAnswer(invocation -> {
+            List<Category> found = new ArrayList<>();
+            invocation.<Iterable<UUID>>getArgument(0).forEach(id -> {
+                if (store.containsKey(id)) {
+                    found.add(store.get(id));
+                }
+            });
+            return found;
+        });
         lenient().when(categoryRepository.saveAndFlush(any(Category.class))).thenAnswer(invocation -> {
             Category category = invocation.getArgument(0);
             if (category.getId() == null) {
@@ -104,7 +125,50 @@ class CategoryServiceTest {
         assertThatThrownBy(() -> service.create(request("Child", null, retired.getId(), null)))
                 .isInstanceOf(FieldValidationException.class)
                 .satisfies(e -> assertThat(((FieldValidationException) e).getViolations().getFirst().message())
-                        .contains("Inactive"));
+                        .contains("is inactive"));
+    }
+
+    @Test
+    void activeCategoryUnderAnInactiveParentCannotBeChosenAsAParent() {
+        Category archive = save(CategoryTestData.category("Archive", "archive", null, CatalogStatus.INACTIVE));
+        Category oldPhones = save(CategoryTestData.category("Old Phones", "old-phones", archive.getId(),
+                CatalogStatus.ACTIVE));
+
+        assertThatThrownBy(() -> service.create(request("Feature Phones", null, oldPhones.getId(), null)))
+                .isInstanceOf(FieldValidationException.class)
+                .satisfies(e -> assertThat(((FieldValidationException) e).getViolations().getFirst().message())
+                        .contains("under inactive category 'Archive'"));
+    }
+
+    @Test
+    void reactivatingAParentMakesItsActiveChildrenAssignableAgain() {
+        Category electronics = save(CategoryTestData.category("Electronics", "electronics", null,
+                CatalogStatus.INACTIVE));
+        Category phones = save(CategoryTestData.category("Mobile Phones", "mobile-phones", electronics.getId(),
+                CatalogStatus.ACTIVE));
+        when(categoryRepository.findAllByOrderByNameAsc()).thenReturn(List.of(electronics, phones));
+
+        assertThat(service.options(true)).filteredOn(o -> o.id().equals(phones.getId()))
+                .extracting(CategoryOption::assignable).containsExactly(false);
+
+        service.changeStatus(electronics.getId(), CatalogStatus.ACTIVE);
+
+        assertThat(phones.getStatus()).isEqualTo(CatalogStatus.ACTIVE);
+        assertThat(service.options(true)).extracting(CategoryOption::assignable).containsExactly(true, true);
+        CategoryResponse child = service.create(request("Smartphones", null, phones.getId(), null));
+        assertThat(child.parentId()).isEqualTo(phones.getId());
+    }
+
+    @Test
+    void deactivatingAParentDoesNotChangeTheChildrensOwnStatus() {
+        Category electronics = save(CategoryTestData.active("Electronics", "electronics"));
+        Category phones = save(CategoryTestData.category("Mobile Phones", "mobile-phones", electronics.getId(),
+                CatalogStatus.ACTIVE));
+
+        service.changeStatus(electronics.getId(), CatalogStatus.INACTIVE);
+
+        assertThat(phones.getStatus()).isEqualTo(CatalogStatus.ACTIVE);
+        verify(categoryRepository, never()).saveAllAndFlush(any());
     }
 
     @Test

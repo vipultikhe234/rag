@@ -14,7 +14,7 @@ public final class AttributeTestData {
                                              List<String> options, boolean required, CatalogStatus status) {
         ProductAttribute attribute = new ProductAttribute();
         attribute.setId(UUID.randomUUID());
-        attribute.setCategoryId(categoryId);
+        attribute.setCategoryIds(categoryId == null ? List.of() : List.of(categoryId));
         attribute.setName(name);
         attribute.setSlug(slug);
         attribute.setDataType(type);

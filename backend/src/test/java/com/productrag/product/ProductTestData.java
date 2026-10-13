@@ -1,5 +1,6 @@
 package com.productrag.product;
 
+import com.productrag.catalog.Slugs;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -17,6 +18,7 @@ public final class ProductTestData {
         product.setId(UUID.randomUUID());
         product.setName(name);
         product.setSku(sku);
+        product.setSlug(Slugs.from(name));
         product.setDescription(name + " description with useful features.");
         product.setCategory("Electronics");
         product.setBrand("ExampleBrand");

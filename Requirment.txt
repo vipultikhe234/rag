@@ -458,4 +458,11 @@ Begin with research and inspection. Do not implement until the existing schema a
 
 
 
-2. 
+2. how much brand we have
+Assistant:
+There are two brands in the catalog:
+
+Nike (SKU: NIKE-REV7)
+Levi's (SKU: LEVI-TEE-CN)
+
+but we have 41 brand then why i get only 2 my suggestion is that i want exact correct answer chech embedding properly 

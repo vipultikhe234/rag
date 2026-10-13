@@ -65,14 +65,14 @@ public class ProductImageService {
         for (int i = 0; i < requests.size(); i++) {
             ProductImageRequest request = requests.get(i);
             String url = request.url().trim();
+            String field = "images[" + i + "]";
             if (!urls.add(url.toLowerCase(Locale.ROOT))) {
-                throw FieldValidationException.of("images[" + i + "].url", "This image is listed twice");
+                throw FieldValidationException.of(field + ".url", "This image is listed twice");
             }
             ProductImage image;
             if (request.id() != null) {
                 image = current.stream().filter(img -> img.getId().equals(request.id())).findFirst()
-                        .orElseThrow(() -> FieldValidationException.of("images[" + i + "]",
-                                "Image does not belong to this product"));
+                        .orElseThrow(() -> FieldValidationException.of(field, "Image does not belong to this product"));
             } else {
                 image = current.stream().filter(img -> img.getUrl().equals(url)).findFirst().orElse(null);
             }

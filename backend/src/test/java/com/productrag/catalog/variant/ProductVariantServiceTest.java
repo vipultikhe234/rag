@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,8 +14,13 @@ import static org.mockito.Mockito.when;
 
 import com.productrag.catalog.CatalogStatus;
 import com.productrag.catalog.attribute.AttributeValueValidator;
+import com.productrag.catalog.category.CategoryRepository;
+import com.productrag.catalog.option.ProductOptionService;
+import com.productrag.catalog.option.ProductOptionService.Combination;
+import com.productrag.catalog.option.dto.SelectedOption;
 import com.productrag.catalog.variant.dto.ProductVariantRequest;
 import com.productrag.catalog.variant.dto.ProductVariantResponse;
+import com.productrag.catalog.variant.dto.VariantDraft;
 import com.productrag.common.exception.BadRequestException;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.FieldValidationException;
@@ -21,11 +28,16 @@ import com.productrag.product.Product;
 import com.productrag.product.ProductRepository;
 import com.productrag.product.ProductStatus;
 import com.productrag.product.ProductTestData;
+import com.productrag.product.image.ProductImageService;
 import com.productrag.support.TestProperties;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +53,13 @@ class ProductVariantServiceTest {
     @Mock
     private ProductRepository productRepository;
     @Mock
+    private CategoryRepository categoryRepository;
+    @Mock
     private AttributeValueValidator attributeValueValidator;
+    @Mock
+    private ProductOptionService optionService;
+    @Mock
+    private ProductImageService imageService;
 
     private final Map<UUID, ProductVariant> store = new HashMap<>();
     private ProductVariantService service;
@@ -49,13 +67,16 @@ class ProductVariantServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ProductVariantService(variantRepository, productRepository, attributeValueValidator,
-                TestProperties.defaults());
+        service = new ProductVariantService(variantRepository, productRepository, categoryRepository,
+                attributeValueValidator, optionService, imageService, TestProperties.defaults());
         phone = ProductTestData.product("Samsung Galaxy S24", "GS24", "74999.00", 10, ProductStatus.ACTIVE);
         phone.setCategoryId(UUID.randomUUID());
-        lenient().when(productRepository.findById(phone.getId())).thenReturn(Optional.of(phone));
+        phone.setHasVariants(true);
+        lenient().when(productRepository.findByIdForUpdate(phone.getId())).thenReturn(Optional.of(phone));
         lenient().when(attributeValueValidator.validate(any(), anyMap(), anyMap(), anyBoolean()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
+        lenient().when(optionService.resolve(eq(phone.getId()), any(), anyString()))
+                .thenAnswer(invocation -> combination(invocation.getArgument(1)));
         lenient().when(variantRepository.saveAndFlush(any(ProductVariant.class))).thenAnswer(invocation -> {
             ProductVariant variant = invocation.getArgument(0);
             if (variant.getId() == null) {
@@ -69,22 +90,26 @@ class ProductVariantServiceTest {
     }
 
     @Test
-    void createNormalizesSkuAndComputesEffectivePrice() {
-        ProductVariantResponse created = service.create(request(" gs24-256-blk ", "74999", "69999", 3));
+    void createNormalizesSkuNamesTheVariantFromItsOptionsAndRefreshesTheSummary() {
+        ProductVariantResponse created = service.create(request(" gs24-256-blk ", Map.of("Color", "Black",
+                "Storage", "256"), "74999", "79999", 3));
 
         assertThat(created.sku()).isEqualTo("GS24-256-BLK");
-        assertThat(created.effectivePrice()).isEqualByComparingTo("69999.00");
+        assertThat(created.variantName()).isEqualTo("Black / 256");
+        assertThat(created.compareAtPrice()).isEqualByComparingTo("79999.00");
+        assertThat(created.onSale()).isTrue();
         assertThat(created.status()).isEqualTo(CatalogStatus.ACTIVE);
         assertThat(created.stockLevel()).isEqualTo(StockLevel.LOW_STOCK);
         assertThat(created.productName()).isEqualTo("Samsung Galaxy S24");
+        verify(optionService).assign(eq(created.id()), eq(phone.getId()), any(Combination.class));
+        verify(productRepository).refreshVariantSummary(phone.getId());
     }
 
     @Test
-    void salePriceMustBeLowerThanThePrice() {
-        assertThatThrownBy(() -> service.create(request("GS24-1", "100.00", "100.00", 1)))
-                .isInstanceOf(FieldValidationException.class)
-                .satisfies(e -> assertThat(((FieldValidationException) e).getViolations().getFirst().field())
-                        .isEqualTo("salePrice"));
+    void compareAtPriceMustBeHigherThanThePrice() {
+        assertThatThrownBy(() -> service.create(request("GS24-1", Map.of("Color", "Black"), "100.00", "100.00", 1)))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().field()).isEqualTo("compareAtPrice"));
         verify(variantRepository, never()).saveAndFlush(any());
     }
 
@@ -92,60 +117,170 @@ class ProductVariantServiceTest {
     void skuUsedByAProductOrAnotherVariantIsAConflict() {
         when(productRepository.existsBySku("GS24")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(request("gs24", "100.00", null, 1)))
-                .isInstanceOf(ConflictException.class)
-                .extracting("code").isEqualTo("SKU_ALREADY_EXISTS");
+        assertThatThrownBy(() -> service.create(request("gs24", Map.of("Color", "Black"), "100.00", null, 1)))
+                .isInstanceOfSatisfying(ConflictException.class, e ->
+                        assertThat(e.getCode()).isEqualTo("SKU_ALREADY_EXISTS"));
     }
 
     @Test
-    void variantsCannotBeAddedToAnInactiveProduct() {
+    void anExistingOptionCombinationIsAConflict() {
+        when(variantRepository.existsByProductIdAndOptionSignature(eq(phone.getId()), anyString())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(request("GS24-2", Map.of("Color", "Black"), "100.00", null, 1)))
+                .isInstanceOfSatisfying(ConflictException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo("VARIANT_COMBINATION_EXISTS");
+                    assertThat(e.getMessage()).contains("Black");
+                });
+        verify(variantRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void barcodeUsedByAnotherVariantIsAConflict() {
+        when(variantRepository.existsByBarcode("8801643")).thenReturn(true);
+        ProductVariantRequest request = new ProductVariantRequest(phone.getId(), "GS24-3", Map.of("Color", "Black"),
+                null, new BigDecimal("100"), null, 1, "8801643", null, null, null);
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOfSatisfying(ConflictException.class, e ->
+                        assertThat(e.getCode()).isEqualTo("BARCODE_ALREADY_EXISTS"));
+    }
+
+    @Test
+    void simpleProductsDoNotAcceptVariants() {
+        phone.setHasVariants(false);
+
+        assertThatThrownBy(() -> service.create(request("GS24-4", Map.of("Color", "Black"), "100.00", null, 1)))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().field()).isEqualTo("productId"));
+    }
+
+    @Test
+    void variantsCanBePreparedWhileTheProductIsInactive() {
         phone.setStatus(ProductStatus.INACTIVE);
 
-        assertThatThrownBy(() -> service.create(request("GS24-1", "100.00", null, 1)))
-                .isInstanceOf(FieldValidationException.class)
-                .satisfies(e -> assertThat(((FieldValidationException) e).getViolations().getFirst().field())
-                        .isEqualTo("productId"));
+        ProductVariantResponse created = service.create(request("GS24-5", Map.of("Color", "Black"), "100.00", null,
+                1));
+
+        assertThat(created.productStatus()).isEqualTo(ProductStatus.INACTIVE);
+    }
+
+    @Test
+    void theImageMustBelongToTheProduct() {
+        ProductVariantRequest request = new ProductVariantRequest(phone.getId(), "GS24-6", Map.of("Color", "Black"),
+                null, new BigDecimal("100"), null, 1, null, UUID.randomUUID(), null, null);
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().field()).isEqualTo("imageId"));
+    }
+
+    @Test
+    void batchCreateReportsDuplicateSkusAndCombinationsPerRow() {
+        List<VariantDraft> sameSku = List.of(draft("GS24-A", "Black"), draft("gs24-a", "White"));
+        assertThatThrownBy(() -> service.createForProduct(phone.getId(), sameSku))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().field()).isEqualTo("variants[1].sku"));
+
+        List<VariantDraft> sameOptions = List.of(draft("GS24-B", "Black"), draft("GS24-C", "black"));
+        assertThatThrownBy(() -> service.createForProduct(phone.getId(), sameOptions))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().field()).isEqualTo("variants[1].options"));
+    }
+
+    @Test
+    void aProductHasAtMostOneHundredVariants() {
+        when(variantRepository.countByProductId(phone.getId())).thenReturn(100L);
+
+        assertThatThrownBy(() -> service.createForProduct(phone.getId(), List.of(draft("GS24-D", "Black"))))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().message()).contains("at most 100"));
     }
 
     @Test
     void variantOptionsAreTypeCheckedWithoutRequiringEveryAttribute() {
-        service.create(new ProductVariantRequest(phone.getId(), "GS24-2", "256 GB", Map.of("storage-capacity", "256"),
-                new BigDecimal("80000"), null, 0, null, null));
+        service.create(new ProductVariantRequest(phone.getId(), "GS24-7", Map.of("Color", "Black"),
+                Map.of("warranty-period", "12"), new BigDecimal("80000"), null, 0, null, null, null, null));
 
-        verify(attributeValueValidator).validate(phone.getCategoryId(), Map.of("storage-capacity", "256"), Map.of(),
+        verify(attributeValueValidator).validate(phone.getCategoryId(), Map.of("warranty-period", "12"), Map.of(),
                 false);
     }
 
     @Test
     void zeroStockIsOutOfStockAndDeactivationKeepsTheVariant() {
-        ProductVariantResponse created = service.create(request("GS24-3", "100.00", null, 0));
+        ProductVariantResponse created = service.create(request("GS24-8", Map.of("Color", "Black"), "100.00", null,
+                0));
         assertThat(created.stockLevel()).isEqualTo(StockLevel.OUT_OF_STOCK);
 
         ProductVariantResponse inactive = service.changeStatus(created.id(), CatalogStatus.INACTIVE);
 
         assertThat(inactive.status()).isEqualTo(CatalogStatus.INACTIVE);
         assertThat(store).containsKey(created.id());
+        verify(variantRepository, never()).delete(any(ProductVariant.class));
+        verify(productRepository, org.mockito.Mockito.times(2)).refreshVariantSummary(phone.getId());
+    }
+
+    @Test
+    void aVariantCannotMoveToAnotherProduct() {
+        ProductVariantResponse created = service.create(request("GS24-9", Map.of("Color", "Black"), "100.00", null,
+                1));
+
+        assertThatThrownBy(() -> service.update(created.id(), new ProductVariantRequest(UUID.randomUUID(), "GS24-9",
+                Map.of("Color", "Black"), null, new BigDecimal("100.00"), null, 1, null, null, null, 0L)))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().field()).isEqualTo("productId"));
     }
 
     @Test
     void staleVersionIsRejected() {
-        ProductVariantResponse created = service.create(request("GS24-4", "100.00", null, 1));
+        ProductVariantResponse created = service.create(request("GS24-10", Map.of("Color", "Black"), "100.00", null,
+                1));
 
-        assertThatThrownBy(() -> service.update(created.id(), new ProductVariantRequest(phone.getId(), "GS24-4",
-                "Renamed", Map.of(), new BigDecimal("100.00"), null, 1, null, 5L)))
-                .isInstanceOf(ConflictException.class)
-                .extracting("code").isEqualTo("CONCURRENT_MODIFICATION");
+        assertThatThrownBy(() -> service.update(created.id(), new ProductVariantRequest(phone.getId(), "GS24-10",
+                Map.of("Color", "Black"), null, new BigDecimal("100.00"), null, 1, null, null, null, 5L)))
+                .isInstanceOfSatisfying(ConflictException.class, e ->
+                        assertThat(e.getCode()).isEqualTo("CONCURRENT_MODIFICATION"));
     }
 
     @Test
-    void invertedPriceRangeIsRejected() {
-        assertThatThrownBy(() -> service.list(null, null, null, null, new BigDecimal("10"), new BigDecimal("5"),
-                null, null))
+    void invalidListFiltersAreRejected() {
+        assertThatThrownBy(() -> service.list(new VariantListQuery(null, null, null, null, new BigDecimal("10"),
+                new BigDecimal("5"), null, null, null, null), null))
+                .isInstanceOf(BadRequestException.class);
+        Map<String, String> tooMany = Map.of("a", "1", "b", "2", "c", "3", "d", "4", "e", "5", "f", "6");
+        assertThatThrownBy(() -> service.list(new VariantListQuery(null, null, null, null, null, null, null, null,
+                null, tooMany), null))
                 .isInstanceOf(BadRequestException.class);
     }
 
-    private ProductVariantRequest request(String sku, String price, String salePrice, int stock) {
-        return new ProductVariantRequest(phone.getId(), sku, "Variant " + sku, Map.of(), new BigDecimal(price),
-                salePrice == null ? null : new BigDecimal(salePrice), stock, null, null);
+    @Test
+    void optionFilterParametersMustBeNameValuePairs() {
+        assertThat(ProductVariantController.optionFilters(List.of("Color:Black", "Storage Capacity: 256")))
+                .containsEntry("Color", "Black").containsEntry("Storage Capacity", "256");
+        assertThatThrownBy(() -> ProductVariantController.optionFilters(List.of("Black")))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    private ProductVariantRequest request(String sku, Map<String, String> options, String price, String compareAt,
+                                          int stock) {
+        return new ProductVariantRequest(phone.getId(), sku, options, Map.of(), new BigDecimal(price),
+                compareAt == null ? null : new BigDecimal(compareAt), stock, null, null, null, null);
+    }
+
+    private static VariantDraft draft(String sku, String color) {
+        return new VariantDraft(sku, Map.of("Color", color), null, new BigDecimal("100"), null, 1, null, null, null,
+                null);
+    }
+
+    /** Deterministic stand-in for option resolution: value ids derive from the (case-insensitive) value text. */
+    private static Combination combination(Map<String, String> options) {
+        List<SelectedOption> selections = new ArrayList<>();
+        new TreeMap<>(options).forEach((name, value) -> {
+            UUID id = UUID.nameUUIDFromBytes((name + "=" + value.toLowerCase()).getBytes(StandardCharsets.UTF_8));
+            selections.add(new SelectedOption(UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)), name, id,
+                    value, value));
+        });
+        return new Combination(selections,
+                ProductOptionService.signature(selections.stream().map(SelectedOption::valueId).toList()),
+                ProductOptionService.title(selections));
     }
 }

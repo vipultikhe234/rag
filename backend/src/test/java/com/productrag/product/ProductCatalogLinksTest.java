@@ -9,11 +9,13 @@ import com.productrag.catalog.brand.Brand;
 import com.productrag.catalog.brand.BrandRepository;
 import com.productrag.catalog.brand.BrandTestData;
 import com.productrag.catalog.category.Category;
+import com.productrag.catalog.category.CategoryAssignability;
 import com.productrag.catalog.category.CategoryRepository;
 import com.productrag.catalog.category.CategoryTestData;
 import com.productrag.common.exception.FieldValidationException;
 import com.productrag.product.dto.ProductRequest;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +37,26 @@ class ProductCatalogLinksTest {
 
     @BeforeEach
     void setUp() {
-        links = new ProductCatalogLinks(categoryRepository, brandRepository);
+        links = new ProductCatalogLinks(categoryRepository, brandRepository,
+                new CategoryAssignability(categoryRepository));
+    }
+
+    @Test
+    void activeCategoryUnderAnInactiveParentCannotBeNewlyAssigned() {
+        Category electronics = CategoryTestData.category("Electronics", "electronics", null, CatalogStatus.INACTIVE);
+        Category phones = CategoryTestData.category("Mobile Phones", "mobile-phones", electronics.getId(),
+                CatalogStatus.ACTIVE);
+        when(categoryRepository.findById(phones.getId())).thenReturn(Optional.of(phones));
+        when(categoryRepository.findSelfAndAncestorIds(phones.getId()))
+                .thenReturn(List.of(phones.getId(), electronics.getId()));
+        when(categoryRepository.findAllById(List.of(phones.getId(), electronics.getId())))
+                .thenReturn(List.of(phones, electronics));
+
+        assertThatThrownBy(() -> links.category(request(null, phones.getId(), null, null), null))
+                .isInstanceOfSatisfying(FieldValidationException.class, e ->
+                        assertThat(e.getViolations().getFirst().message())
+                                .contains("under inactive category 'Electronics'"));
+        assertThat(links.category(request(null, phones.getId(), null, null), phones.getId())).isSameAs(phones);
     }
 
     @Test
