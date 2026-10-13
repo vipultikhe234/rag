@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
@@ -11,6 +12,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.productrag.catalog.attribute.AttributeValueValidator;
+import com.productrag.catalog.category.Category;
+import com.productrag.catalog.category.CategoryRepository;
+import com.productrag.catalog.category.CategoryTestData;
+import com.productrag.catalog.variant.ProductVariantRepository;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.NotFoundException;
 import com.productrag.product.dto.ProductRequest;
@@ -43,12 +49,25 @@ class ProductServiceTest {
     private VectorSyncOutbox outbox;
     @Mock
     private ProductSyncStatusService syncStatusService;
+    @Mock
+    private ProductCatalogLinks catalogLinks;
+    @Mock
+    private AttributeValueValidator attributeValueValidator;
+    @Mock
+    private CategoryRepository categoryRepository;
+    @Mock
+    private ProductVariantRepository variantRepository;
 
     private ProductService service;
+    private final Category electronics = CategoryTestData.active("Electronics", "electronics");
 
     @BeforeEach
     void setUp() {
-        service = new ProductService(repository, outbox, syncStatusService, TestProperties.defaults());
+        service = new ProductService(repository, outbox, syncStatusService, catalogLinks, attributeValueValidator,
+                categoryRepository, variantRepository, TestProperties.defaults());
+        when(catalogLinks.category(any(), any())).thenReturn(electronics);
+        when(attributeValueValidator.validate(any(), anyMap(), anyMap()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
         when(repository.saveAndFlush(any(Product.class))).thenAnswer(invocation -> {
             Product product = invocation.getArgument(0);
             if (product.getId() == null) {
@@ -126,7 +145,7 @@ class ProductServiceTest {
         Product existing = ProductTestData.headphones();
         when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
         ProductRequest stale = new ProductRequest("Name", "WH-001", "Desc", "Electronics", null,
-                new BigDecimal("10.00"), "INR", 1, Map.of(), null, 99L);
+                new BigDecimal("10.00"), "INR", 1, Map.of(), null, 99L, null, null);
 
         assertThatThrownBy(() -> service.update(existing.getId(), stale))
                 .isInstanceOf(ConflictException.class)
@@ -193,7 +212,7 @@ class ProductServiceTest {
     void currencyDefaultsAndIsUpperCased() {
         when(repository.existsBySku(anyString())).thenReturn(false);
         ProductRequest usd = new ProductRequest("Mouse", "MS-1", "A mouse", "Electronics", null,
-                new BigDecimal("15.5"), "usd", 4, null, null, null);
+                new BigDecimal("15.5"), "usd", 4, null, null, null, null, null);
 
         ProductResponse response = service.create(usd);
 
@@ -203,8 +222,41 @@ class ProductServiceTest {
         verify(outbox).enqueue(any(Product.class), eq(VectorSyncEventType.PRODUCT_CREATED));
     }
 
+    @Test
+    void categoryNameAndIdComeFromTheResolvedCategory() {
+        ProductResponse response = service.create(request("SPK-9", null));
+
+        assertThat(response.categoryId()).isEqualTo(electronics.getId());
+        assertThat(response.category()).isEqualTo("Electronics");
+        assertThat(response.brandId()).isNull();
+    }
+
+    @Test
+    void skuUsedByAVariantIsRejected() {
+        when(variantRepository.existsBySku("GS24-256-BLK")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(request("gs24-256-blk", null)))
+                .isInstanceOf(ConflictException.class)
+                .extracting("code").isEqualTo("SKU_ALREADY_EXISTS");
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void productWithVariantsCannotBeDeleted() {
+        Product existing = ProductTestData.headphones();
+        when(repository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(variantRepository.existsByProductId(existing.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(existing.getId()))
+                .isInstanceOf(ConflictException.class)
+                .extracting("code").isEqualTo("PRODUCT_HAS_VARIANTS");
+        verify(repository, never()).delete(any(Product.class));
+        verify(outbox, never()).enqueue(any(), any());
+    }
+
     private static ProductRequest request(String sku, ProductStatus status) {
         return new ProductRequest("Bluetooth Speaker", sku, "Portable speaker with deep bass.", "Electronics",
-                "ExampleBrand", new BigDecimal("999.00"), null, 25, Map.of("battery_life", "12 hours"), status, null);
+                "ExampleBrand", new BigDecimal("999.00"), null, 25, Map.of("battery_life", "12 hours"), status, null,
+                null, null);
     }
 }

@@ -4,9 +4,18 @@ import { useAuth } from '../../auth/authContext'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 
-const NAV_ITEMS = [
-  { to: '/products', label: 'Product Management', icon: '▦' },
-  { to: '/chat', label: 'AI Chat', icon: '✦' },
+const NAV_SECTIONS = [
+  { heading: null, items: [{ to: '/products', label: 'Product Management', icon: '▦' }] },
+  {
+    heading: 'Catalog',
+    items: [
+      { to: '/categories', label: 'Categories', icon: '⊞' },
+      { to: '/brands', label: 'Brands', icon: '◆' },
+      { to: '/product-attributes', label: 'Attributes', icon: '≡' },
+      { to: '/product-variants', label: 'Variants', icon: '⧉' },
+    ],
+  },
+  { heading: null, items: [{ to: '/chat', label: 'AI Chat', icon: '✦' }] },
 ]
 
 export function AppLayout() {
@@ -38,23 +47,30 @@ export function AppLayout() {
           <img src="/favicon.svg" alt="" className="h-7 w-7" />
           Product RAG
         </div>
-        <nav aria-label="Main navigation" className="space-y-1 px-3 py-4">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={() => setMenuOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                  isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`
-              }
-            >
-              <span aria-hidden="true" className="w-4 text-center">
-                {item.icon}
-              </span>
-              {item.label}
-            </NavLink>
+        <nav aria-label="Main navigation" className="space-y-4 px-3 py-4">
+          {NAV_SECTIONS.map((section, index) => (
+            <div key={section.heading ?? index} className="space-y-1">
+              {section.heading && (
+                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{section.heading}</p>
+              )}
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                      isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`
+                  }
+                >
+                  <span aria-hidden="true" className="w-4 text-center">
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>

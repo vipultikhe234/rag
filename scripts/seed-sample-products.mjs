@@ -6,7 +6,8 @@
 //   node scripts/seed-sample-products.mjs
 // ADMIN_EMAIL / ADMIN_PASSWORD are read from the environment, then from the project-root .env file,
 // and are prompted for if still missing. Optional: API_BASE_URL (default http://localhost:8080/api/v1).
-// Existing SKUs are skipped; nothing is updated or deleted.
+// Categories and brands named by the samples are created first when missing (products must reference existing
+// ones). Existing SKUs are skipped; nothing is updated or deleted.
 
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -30,6 +31,28 @@ async function prompt(question) {
   }
 }
 
+/** Creates the categories or brands (by name) that do not exist yet. */
+async function ensureNamed(resource, names, headers) {
+  const response = await fetch(`${baseUrl}/${resource}/options?includeInactive=true`, { headers })
+  if (!response.ok) {
+    throw new Error(`Listing ${resource} failed with HTTP ${response.status}.`)
+  }
+  const existing = new Set((await response.json()).map((item) => item.name.trim().toLowerCase()))
+  for (const name of new Set(names)) {
+    if (existing.has(name.trim().toLowerCase())) {
+      continue
+    }
+    const created = await fetch(`${baseUrl}/${resource}`, { method: 'POST', headers, body: JSON.stringify({ name }) })
+    if (created.status !== 201 && created.status !== 409) {
+      throw new Error(`Creating ${resource} entry '${name}' failed with HTTP ${created.status}: ${await created.text()}`)
+    }
+    existing.add(name.trim().toLowerCase())
+    if (created.status === 201) {
+      console.log(`created  ${resource === 'categories' ? 'category' : 'brand'} ${name}`)
+    }
+  }
+}
+
 async function main() {
   const email = env.ADMIN_EMAIL || (await prompt('Admin email: '))
   const password = env.ADMIN_PASSWORD || (await prompt('Admin password: '))
@@ -49,6 +72,8 @@ async function main() {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }
 
   const products = JSON.parse(await readFile(new URL('./sample-products.json', import.meta.url), 'utf8'))
+  await ensureNamed('categories', products.map((p) => p.category), headers)
+  await ensureNamed('brands', products.map((p) => p.brand).filter(Boolean), headers)
   let created = 0
   let skipped = 0
   for (const product of products) {

@@ -8,7 +8,7 @@ export const MAX_ATTRIBUTES = 50
 export const attributeTypes = ['text', 'number', 'boolean', 'list'] as const
 export type AttributeType = (typeof attributeTypes)[number]
 
-const attributeRowSchema = z
+export const attributeRowSchema = z
   .object({
     key: z
       .string()
@@ -36,59 +36,67 @@ const attributeRowSchema = z
     }
   })
 
-export const productFormSchema = z
-  .object({
-    name: z.string().trim().min(1, 'Name is required').max(200, 'At most 200 characters'),
-    sku: z
-      .string()
-      .trim()
-      .min(1, 'SKU is required')
-      .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, "1-64 letters, digits, '.', '_' or '-', starting with a letter or digit"),
-    description: z.string().trim().min(1, 'Description is required').max(5000, 'At most 5000 characters'),
-    category: z.string().trim().min(1, 'Category is required').max(100, 'At most 100 characters'),
-    brand: z.string().trim().max(100, 'At most 100 characters'),
-    price: z
-      .string()
-      .trim()
-      .min(1, 'Price is required')
-      .regex(/^\d{1,10}(\.\d{1,2})?$/, 'Enter a non-negative amount with at most 2 decimals'),
-    currency: z
-      .string()
-      .trim()
-      .regex(/^[A-Za-z]{3}$/, '3-letter ISO code such as INR'),
-    stockQuantity: z
-      .string()
-      .trim()
-      .min(1, 'Stock quantity is required')
-      .regex(/^\d+$/, 'Enter a whole number of 0 or more')
-      .refine((value) => Number(value) <= 1_000_000_000, 'Stock quantity is too large'),
-    status: z.enum(['ACTIVE', 'INACTIVE']),
-    attributes: z.array(attributeRowSchema).max(MAX_ATTRIBUTES, `At most ${MAX_ATTRIBUTES} attributes`),
-  })
-  .superRefine((form, ctx) => {
+export type AttributeRow = z.infer<typeof attributeRowSchema>
+
+/** Free-form rows with unique keys; shared by the product and variant forms. */
+export const attributeRowsSchema = z
+  .array(attributeRowSchema)
+  .max(MAX_ATTRIBUTES, `At most ${MAX_ATTRIBUTES} attributes`)
+  .superRefine((rows, ctx) => {
     const seen = new Set<string>()
-    form.attributes.forEach((row, index) => {
+    rows.forEach((row, index) => {
       const key = row.key.trim()
       if (seen.has(key)) {
-        ctx.addIssue({ code: 'custom', path: ['attributes', index, 'key'], message: 'Duplicate attribute name' })
+        ctx.addIssue({ code: 'custom', path: [index, 'key'], message: 'Duplicate attribute name' })
       }
       seen.add(key)
     })
   })
 
+export const productFormSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200, 'At most 200 characters'),
+  sku: z
+    .string()
+    .trim()
+    .min(1, 'SKU is required')
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, "1-64 letters, digits, '.', '_' or '-', starting with a letter or digit"),
+  description: z.string().trim().min(1, 'Description is required').max(5000, 'At most 5000 characters'),
+  categoryId: z.string().min(1, 'Category is required'),
+  brandId: z.string(),
+  price: z
+    .string()
+    .trim()
+    .min(1, 'Price is required')
+    .regex(/^\d{1,10}(\.\d{1,2})?$/, 'Enter a non-negative amount with at most 2 decimals'),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/, '3-letter ISO code such as INR'),
+  stockQuantity: z
+    .string()
+    .trim()
+    .min(1, 'Stock quantity is required')
+    .regex(/^\d+$/, 'Enter a whole number of 0 or more')
+    .refine((value) => Number(value) <= 1_000_000_000, 'Stock quantity is too large'),
+  status: z.enum(['ACTIVE', 'INACTIVE']),
+  /** Values of the category's attribute definitions, keyed by attribute slug (validated against the definitions). */
+  specs: z.record(z.string(), z.string()),
+  attributes: attributeRowsSchema,
+})
+
 export type ProductFormValues = z.infer<typeof productFormSchema>
-export type AttributeRow = ProductFormValues['attributes'][number]
 
 export const emptyProductForm: ProductFormValues = {
   name: '',
   sku: '',
   description: '',
-  category: '',
-  brand: '',
+  categoryId: '',
+  brandId: '',
   price: '',
   currency: 'INR',
   stockQuantity: '0',
   status: 'ACTIVE',
+  specs: {},
   attributes: [],
 }
 
@@ -112,58 +120,70 @@ function toAttributeValue(row: AttributeRow): AttributeValue {
   }
 }
 
-export function toPayload(values: ProductFormValues, version?: number): ProductPayload {
+export function rowsToAttributes(rows: AttributeRow[]): Record<string, AttributeValue> {
   const attributes: Record<string, AttributeValue> = {}
-  for (const row of values.attributes) {
+  for (const row of rows) {
     attributes[row.key.trim()] = toAttributeValue(row)
   }
+  return attributes
+}
+
+export function toPayload(
+  values: ProductFormValues,
+  specAttributes: Record<string, AttributeValue>,
+  version?: number,
+): ProductPayload {
   return {
     name: values.name.trim(),
     sku: values.sku.trim(),
     description: values.description.trim(),
-    category: values.category.trim(),
-    brand: values.brand.trim() || null,
+    categoryId: values.categoryId,
+    brandId: values.brandId || null,
     price: Number(values.price),
     currency: values.currency.trim().toUpperCase(),
     stockQuantity: Number(values.stockQuantity),
     status: values.status as ProductStatus,
-    attributes,
+    attributes: { ...rowsToAttributes(values.attributes), ...specAttributes },
     version,
   }
 }
 
+/** All stored attributes start as free-form rows; rows matching the category's definitions move to `specs`. */
 export function fromProduct(product: Product): ProductFormValues {
   return {
     name: product.name,
     sku: product.sku,
     description: product.description,
-    category: product.category,
-    brand: product.brand ?? '',
+    categoryId: product.categoryId ?? '',
+    brandId: product.brandId ?? '',
     price: String(product.price),
     currency: product.currency,
     stockQuantity: String(product.stockQuantity),
     status: product.status,
+    specs: {},
     attributes: Object.entries(product.attributes ?? {}).map(([key, value]) => toRow(key, value)),
   }
 }
 
-function toRow(key: string, value: AttributeValue): AttributeRow {
+export function toRow(key: string, value: AttributeValue): AttributeRow {
   if (Array.isArray(value)) return { key, type: 'list', value: value.join(', ') }
   if (typeof value === 'number') return { key, type: 'number', value: String(value) }
   if (typeof value === 'boolean') return { key, type: 'boolean', value: String(value) }
   return { key, type: 'text', value: String(value) }
 }
 
-/** Maps backend field names (e.g. "price", "attributes") to form fields for server-side validation errors. */
-export const formFieldNames = new Set<string>([
-  'name',
-  'sku',
-  'description',
-  'category',
-  'brand',
-  'price',
-  'currency',
-  'stockQuantity',
-  'status',
-  'attributes',
-])
+/** Maps backend field names to form fields for server-side validation errors. */
+export const productFieldMap: Record<string, keyof ProductFormValues> = {
+  name: 'name',
+  sku: 'sku',
+  description: 'description',
+  category: 'categoryId',
+  categoryId: 'categoryId',
+  brand: 'brandId',
+  brandId: 'brandId',
+  price: 'price',
+  currency: 'currency',
+  stockQuantity: 'stockQuantity',
+  status: 'status',
+  attributes: 'attributes',
+}

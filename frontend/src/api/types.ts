@@ -46,7 +46,9 @@ export interface Product {
   sku: string
   description: string
   category: string
+  categoryId: string | null
   brand: string | null
+  brandId: string | null
   price: number
   currency: string
   stockQuantity: number
@@ -62,8 +64,8 @@ export interface ProductPayload {
   name: string
   sku: string
   description: string
-  category: string
-  brand?: string | null
+  categoryId: string
+  brandId?: string | null
   price: number
   currency: string
   stockQuantity: number
@@ -74,8 +76,157 @@ export interface ProductPayload {
 
 export interface ProductQuery {
   q?: string
-  category?: string
+  categoryId?: string
+  brandId?: string
+  /** "slug:value" pairs for filterable attributes */
+  attr?: string[]
   status?: ProductStatus | ''
+  page: number
+  size: number
+  sort: string
+}
+
+export type CatalogStatus = 'ACTIVE' | 'INACTIVE'
+
+export interface Category {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  imageUrl: string | null
+  parentId: string | null
+  parentName: string | null
+  status: CatalogStatus
+  productCount: number
+  subcategoryCount: number
+  attributeCount: number
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CategoryOption {
+  id: string
+  name: string
+  slug: string
+  parentId: string | null
+  /** Full hierarchy, e.g. "Electronics / Laptops" */
+  path: string
+  status: CatalogStatus
+}
+
+export interface CategoryPayload {
+  name: string
+  slug?: string | null
+  description?: string | null
+  imageUrl?: string | null
+  parentId?: string | null
+  status?: CatalogStatus
+  version?: number
+}
+
+export interface Brand {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  logoUrl: string | null
+  websiteUrl: string | null
+  status: CatalogStatus
+  productCount: number
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BrandOption {
+  id: string
+  name: string
+  slug: string
+  status: CatalogStatus
+}
+
+export interface BrandPayload {
+  name: string
+  slug?: string | null
+  description?: string | null
+  logoUrl?: string | null
+  websiteUrl?: string | null
+  status?: CatalogStatus
+  version?: number
+}
+
+export type AttributeDataType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'SELECT'
+
+export interface ProductAttribute {
+  id: string
+  categoryId: string
+  categoryName: string | null
+  name: string
+  slug: string
+  dataType: AttributeDataType
+  options: string[]
+  unit: string | null
+  required: boolean
+  filterable: boolean
+  status: CatalogStatus
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProductAttributePayload {
+  categoryId: string
+  name: string
+  slug?: string | null
+  dataType: AttributeDataType
+  options: string[]
+  unit?: string | null
+  required: boolean
+  filterable: boolean
+  status?: CatalogStatus
+  version?: number
+}
+
+export type StockLevel = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK'
+export type StockFilter = 'AVAILABLE' | StockLevel
+
+export interface ProductVariant {
+  id: string
+  productId: string
+  productName: string
+  productSku: string
+  productStatus: ProductStatus
+  currency: string
+  sku: string
+  variantName: string
+  attributes: Record<string, AttributeValue>
+  price: number
+  salePrice: number | null
+  effectivePrice: number
+  stockQuantity: number
+  stockLevel: StockLevel
+  status: CatalogStatus
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProductVariantPayload {
+  productId: string
+  sku: string
+  variantName: string
+  attributes: Record<string, AttributeValue>
+  price: number
+  salePrice: number | null
+  stockQuantity: number
+  status?: CatalogStatus
+  version?: number
+}
+
+export interface ListQuery {
+  q?: string
+  status?: CatalogStatus | ''
   page: number
   size: number
   sort: string

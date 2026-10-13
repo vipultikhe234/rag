@@ -40,8 +40,9 @@ class ProductRequestValidationTest {
 
     @Test
     void requiredFieldsAreEnforced() {
-        ProductRequest request = new ProductRequest(" ", "", "", "", null, null, null, null, null, null, null);
-        assertThat(invalidFields(request)).contains("name", "sku", "description", "category", "price", "stockQuantity");
+        ProductRequest request = new ProductRequest(" ", "", "", "", null, null, null, null, null, null, null, null,
+                null);
+        assertThat(invalidFields(request)).contains("name", "sku", "description", "price", "stockQuantity");
     }
 
     @Test
@@ -57,14 +58,14 @@ class ProductRequestValidationTest {
     @Test
     void negativeStockIsRejected() {
         ProductRequest request = new ProductRequest("Name", "SKU-1", "Desc", "Cat", null, BigDecimal.TEN, "INR", -1,
-                Map.of(), null, null);
+                Map.of(), null, null, null, null);
         assertThat(invalidFields(request)).containsExactly("stockQuantity");
     }
 
     @Test
     void invalidSkuAndCurrencyAreRejected() {
         ProductRequest request = new ProductRequest("Name", "bad sku!", "Desc", "Cat", null, BigDecimal.TEN, "RUPEE", 1,
-                Map.of(), null, null);
+                Map.of(), null, null, null, null);
         assertThat(invalidFields(request)).containsExactlyInAnyOrder("sku", "currency");
     }
 
@@ -95,16 +96,16 @@ class ProductRequestValidationTest {
 
     private static ProductRequest valid() {
         return new ProductRequest("Wireless Headphones", "WH-001", "Great headphones", "Electronics", "Brand",
-                new BigDecimal("2499.00"), "INR", 10, Map.of("battery_life", "30 hours"), null, null);
+                new BigDecimal("2499.00"), "INR", 10, Map.of("battery_life", "30 hours"), null, null, null, null);
     }
 
     private static ProductRequest withPrice(String price) {
         return new ProductRequest("Name", "SKU-1", "Desc", "Cat", null, new BigDecimal(price), "INR", 1, Map.of(),
-                null, null);
+                null, null, null, null);
     }
 
     private static ProductRequest withAttributes(Map<String, Object> attributes) {
         return new ProductRequest("Name", "SKU-1", "Desc", "Cat", null, BigDecimal.TEN, "INR", 1, attributes, null,
-                null);
+                null, null, null);
     }
 }

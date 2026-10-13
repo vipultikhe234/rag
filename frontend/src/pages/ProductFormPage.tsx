@@ -1,27 +1,35 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { useEffect, useMemo, useState } from 'react'
+import { useForm, useWatch, type Path } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router'
-import { productApi } from '../api/endpoints'
-import { normalizeError } from '../api/errors'
-import type { Product } from '../api/types'
+import { brandApi, categoryApi, productApi } from '../api/endpoints'
+import type { AttributeValue } from '../api/types'
 import { useToast } from '../components/toast/toastContext'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { SelectField, TextAreaField, TextField } from '../components/ui/FormField'
 import { LoadingBlock } from '../components/ui/Spinner'
 import { ErrorState, InlineAlert } from '../components/ui/States'
+import { PageHeader } from '../features/catalog/CatalogUi'
+import { collectSpecs } from '../features/catalog/attributeValues'
+import { applyServerErrors } from '../features/catalog/formErrors'
+import { useLoader } from '../features/catalog/hooks'
+import { SpecFields } from '../features/catalog/SpecFields'
+import { linkClass } from '../features/catalog/styles'
+import { useSpecDefinitions } from '../features/catalog/useSpecDefinitions'
 import { AttributesEditor } from '../features/products/AttributesEditor'
 import { SyncBadge } from '../features/products/badges'
 import {
   emptyProductForm,
-  formFieldNames,
   fromProduct,
+  productFieldMap,
   productFormSchema,
   toPayload,
   type ProductFormValues,
 } from '../features/products/productForm'
 import { formatDateTime } from '../lib/format'
+
+const NO_ATTRIBUTES: Record<string, AttributeValue> = {}
 
 interface ProductFormPageProps {
   mode: 'create' | 'edit'
@@ -31,12 +39,12 @@ export function ProductFormPage({ mode }: ProductFormPageProps) {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const [product, setProduct] = useState<Product | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(mode === 'edit')
   const [serverError, setServerError] = useState<string | null>(null)
-  const [categories, setCategories] = useState<string[]>([])
-  const [reloadKey, setReloadKey] = useState(0)
+
+  const record = useLoader((signal) => (id ? productApi.get(id, signal) : Promise.resolve(null)), id ?? 'new')
+  const categories = useLoader((signal) => categoryApi.options(true, signal), 'categories')
+  const brands = useLoader((signal) => brandApi.options(true, signal), 'brands')
+  const product = record.data
 
   const {
     register,
@@ -44,47 +52,50 @@ export function ProductFormPage({ mode }: ProductFormPageProps) {
     handleSubmit,
     reset,
     setError,
-    formState: { errors, isSubmitting, isDirty },
+    getValues,
+    setValue,
+    formState: { errors, isSubmitting },
   } = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: emptyProductForm,
     mode: 'onBlur',
   })
   const attributeRows = useWatch({ control, name: 'attributes' })
+  const categoryId = useWatch({ control, name: 'categoryId' })
 
   useEffect(() => {
-    productApi
-      .categories()
-      .then(setCategories)
-      .catch(() => setCategories([]))
-  }, [])
+    if (product) reset(fromProduct(product))
+  }, [product, reset])
 
-  useEffect(() => {
-    if (mode !== 'edit' || !id) return
-    const controller = new AbortController()
-    productApi
-      .get(id, controller.signal)
-      .then((loaded) => {
-        setProduct(loaded)
-        reset(fromProduct(loaded))
-        setLoadError(null)
-      })
-      .catch((err: unknown) => {
-        if (!controller.signal.aborted) setLoadError(normalizeError(err).message)
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-    return () => controller.abort()
-  }, [mode, id, reset, reloadKey])
+  const original = product?.attributes ?? NO_ATTRIBUTES
+  const specs = useSpecDefinitions(categoryId, original, getValues, setValue)
+
+  const categoryChoices = useMemo(
+    () => (categories.data ?? []).filter((o) => o.status === 'ACTIVE' || o.id === product?.categoryId),
+    [categories.data, product],
+  )
+  const brandChoices = useMemo(
+    () => (brands.data ?? []).filter((o) => o.status === 'ACTIVE' || o.id === product?.brandId),
+    [brands.data, product],
+  )
 
   const onSubmit = async (values: ProductFormValues) => {
     setServerError(null)
+    if (!specs.definitions) {
+      setServerError('The attributes for this category have not loaded yet. Wait a moment and try again.')
+      return
+    }
+    const { attributes, fieldErrors } = collectSpecs(specs.definitions, values.specs, values.attributes, original, true)
+    if (fieldErrors.length > 0) {
+      fieldErrors.forEach(([path, message]) => setError(path as Path<ProductFormValues>, { message }))
+      setServerError('Please correct the highlighted fields.')
+      return
+    }
     try {
       const saved =
         mode === 'create'
-          ? await productApi.create(toPayload(values))
-          : await productApi.update(id!, toPayload(values, product?.version))
+          ? await productApi.create(toPayload(values, attributes))
+          : await productApi.update(id!, toPayload(values, attributes, product?.version))
       toast.success(
         mode === 'create'
           ? `${saved.name} created. It will be available in AI Chat once indexing completes.`
@@ -92,63 +103,60 @@ export function ProductFormPage({ mode }: ProductFormPageProps) {
       )
       navigate('/products')
     } catch (err) {
-      const normalized = normalizeError(err)
-      if (normalized.code === 'SKU_ALREADY_EXISTS') {
-        setError('sku', { message: 'This SKU is already used by another product' }, { shouldFocus: true })
-        return
-      }
-      let mapped = false
-      for (const violation of normalized.fieldErrors) {
-        const field = violation.field.split(/[.[]/)[0]
-        if (formFieldNames.has(field)) {
-          setError(field as keyof ProductFormValues, { message: violation.message })
-          mapped = true
-        }
-      }
-      setServerError(mapped ? 'Please correct the highlighted fields.' : normalized.message)
+      const typedSlugs = new Set(specs.definitions.filter((d) => d.status === 'ACTIVE').map((d) => d.slug))
+      setServerError(
+        applyServerErrors(err, setError, {
+          fields: productFieldMap,
+          conflicts: { SKU_ALREADY_EXISTS: 'sku' },
+          specField: (slug) => (typedSlugs.has(slug) ? (`specs.${slug}` as Path<ProductFormValues>) : null),
+        }),
+      )
     }
   }
 
-  if (loading) {
+  // Wait for the select options too, so the selects can show the stored values once the form is filled.
+  if ((mode === 'edit' && record.loading) || categories.loading || brands.loading) {
     return <LoadingBlock label="Loading product" />
   }
-  if (loadError) {
+  if (mode === 'edit' && (record.error || !product)) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
-        <ErrorState
-          message={loadError}
-          onRetry={() => {
-            setLoading(true)
-            setReloadKey((key) => key + 1)
-          }}
-        />
-        <Link to="/products" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-          ← Back to products
-        </Link>
+        <PageHeader title="Edit product" back={{ to: '/products', label: 'Back to products' }} />
+        <ErrorState message={record.error ?? 'The product was not found.'} onRetry={record.reload} />
       </div>
     )
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <Link to="/products" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-          ← Back to products
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-          {mode === 'create' ? 'Add product' : `Edit ${product?.name ?? 'product'}`}
-        </h1>
-        {product && (
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-            <span>Last updated {formatDateTime(product.updatedAt)}</span>
-            <span className="flex items-center gap-1">
-              AI index: <SyncBadge sync={product.vectorSync} />
+      <PageHeader
+        title={mode === 'create' ? 'Add product' : `Edit ${product?.name ?? 'product'}`}
+        back={{ to: '/products', label: 'Back to products' }}
+        description={
+          product && (
+            <span className="flex flex-wrap items-center gap-3 text-xs">
+              <span>Last updated {formatDateTime(product.updatedAt)}</span>
+              <span className="flex items-center gap-1">
+                AI index: <SyncBadge sync={product.vectorSync} />
+              </span>
             </span>
-          </div>
-        )}
-      </div>
+          )
+        }
+        actions={
+          product && (
+            <Link to={`/product-variants?productId=${product.id}`} className={linkClass.secondary}>
+              Manage variants
+            </Link>
+          )
+        }
+      />
 
       {serverError && <InlineAlert tone="red">{serverError}</InlineAlert>}
+      {(categories.error || brands.error) && (
+        <InlineAlert tone="amber">
+          {categories.error ? `Categories could not be loaded: ${categories.error}` : `Brands could not be loaded: ${brands.error}`}
+        </InlineAlert>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <Card title="Details">
@@ -157,7 +165,7 @@ export function ProductFormPage({ mode }: ProductFormPageProps) {
             <TextField
               label="SKU"
               required
-              hint="Stored in upper case. Must be unique."
+              hint="Stored in upper case. Must be unique across products and variants."
               className="font-mono uppercase"
               error={errors.sku?.message}
               {...register('sku')}
@@ -172,19 +180,30 @@ export function ProductFormPage({ mode }: ProductFormPageProps) {
                 {...register('description')}
               />
             </div>
-            <TextField
+            <SelectField
               label="Category"
               required
-              list="category-options"
-              error={errors.category?.message}
-              {...register('category')}
-            />
-            <datalist id="category-options">
-              {categories.map((item) => (
-                <option key={item} value={item} />
+              hint="Determines which attributes the product has."
+              error={errors.categoryId?.message}
+              {...register('categoryId')}
+            >
+              <option value="">Select a category</option>
+              {categoryChoices.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.path}
+                  {option.status === 'INACTIVE' ? ' (inactive)' : ''}
+                </option>
               ))}
-            </datalist>
-            <TextField label="Brand" error={errors.brand?.message} {...register('brand')} />
+            </SelectField>
+            <SelectField label="Brand" error={errors.brandId?.message} {...register('brandId')}>
+              <option value="">No brand</option>
+              {brandChoices.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                  {option.status === 'INACTIVE' ? ' (inactive)' : ''}
+                </option>
+              ))}
+            </SelectField>
           </div>
         </Card>
 
@@ -215,15 +234,41 @@ export function ProductFormPage({ mode }: ProductFormPageProps) {
           </div>
         </Card>
 
+        <Card title="Specifications" description="Attributes defined for the selected category and its parent categories.">
+          {!categoryId ? (
+            <p className="text-sm text-slate-500">Choose a category to see its attributes.</p>
+          ) : specs.error ? (
+            <ErrorState message={specs.error} onRetry={specs.reload} />
+          ) : !specs.definitions ? (
+            <LoadingBlock label="Loading attributes" />
+          ) : (
+            <SpecFields
+              definitions={specs.definitions}
+              original={original}
+              registerSpec={(slug) => register(`specs.${slug}`)}
+              errorFor={(slug) => errors.specs?.[slug]?.message}
+              enforceRequired
+              ownCategoryId={categoryId}
+            />
+          )}
+        </Card>
+
         <Card>
-          <AttributesEditor control={control} register={register} errors={errors} watchTypes={attributeRows} />
+          <AttributesEditor
+            control={control}
+            register={register}
+            errors={errors}
+            watchTypes={attributeRows}
+            legend="Additional attributes"
+            description="Other key facts not covered by the specifications above. All attributes are included in the AI search index."
+          />
         </Card>
 
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => navigate('/products')} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" loading={isSubmitting} disabled={mode === 'edit' && !isDirty}>
+          <Button type="submit" loading={isSubmitting}>
             {mode === 'create' ? 'Create product' : 'Save changes'}
           </Button>
         </div>

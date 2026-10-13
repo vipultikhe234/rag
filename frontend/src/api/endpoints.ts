@@ -1,19 +1,46 @@
 import { api } from './client'
 import type {
+  AttributeDataType,
+  Brand,
+  BrandOption,
+  BrandPayload,
+  CatalogStatus,
+  Category,
+  CategoryOption,
+  CategoryPayload,
   ChatAnswer,
   ChatMessage,
   ConversationSummary,
+  ListQuery,
   LoginResponse,
   PageResponse,
   Product,
+  ProductAttribute,
+  ProductAttributePayload,
   ProductPayload,
   ProductQuery,
   ProductStatus,
+  ProductVariant,
+  ProductVariantPayload,
+  StockFilter,
   User,
   VectorSyncEvent,
   VectorSyncStatus,
   VectorSyncStatusSummary,
 } from './types'
+
+// Spring binds repeated parameters (attr=a&attr=b), not axios' default bracket style (attr[]=a).
+const repeatParams = { indexes: null }
+
+function listParams(query: ListQuery) {
+  return {
+    q: query.q || undefined,
+    status: query.status || undefined,
+    page: query.page,
+    size: query.size,
+    sort: query.sort,
+  }
+}
 
 export const authApi = {
   login: (email: string, password: string) =>
@@ -27,12 +54,15 @@ export const productApi = {
       .get<PageResponse<Product>>('/products', {
         params: {
           q: query.q || undefined,
-          category: query.category || undefined,
+          categoryId: query.categoryId || undefined,
+          brandId: query.brandId || undefined,
+          attr: query.attr && query.attr.length > 0 ? query.attr : undefined,
           status: query.status || undefined,
           page: query.page,
           size: query.size,
           sort: query.sort,
         },
+        paramsSerializer: repeatParams,
         signal,
       })
       .then((r) => r.data),
@@ -43,6 +73,107 @@ export const productApi = {
   setStatus: (id: string, status: ProductStatus) =>
     api.patch<Product>(`/products/${id}/status`, { status }).then((r) => r.data),
   remove: (id: string) => api.delete<void>(`/products/${id}`).then(() => undefined),
+}
+
+export interface CategoryQuery extends ListQuery {
+  parentId?: string
+  rootsOnly?: boolean
+}
+
+export const categoryApi = {
+  list: (query: CategoryQuery, signal?: AbortSignal) =>
+    api
+      .get<PageResponse<Category>>('/categories', {
+        params: { ...listParams(query), parentId: query.parentId || undefined, rootsOnly: query.rootsOnly || undefined },
+        signal,
+      })
+      .then((r) => r.data),
+  options: (includeInactive: boolean, signal?: AbortSignal) =>
+    api.get<CategoryOption[]>('/categories/options', { params: { includeInactive }, signal }).then((r) => r.data),
+  get: (id: string, signal?: AbortSignal) => api.get<Category>(`/categories/${id}`, { signal }).then((r) => r.data),
+  create: (payload: CategoryPayload) => api.post<Category>('/categories', payload).then((r) => r.data),
+  update: (id: string, payload: CategoryPayload) => api.put<Category>(`/categories/${id}`, payload).then((r) => r.data),
+  setStatus: (id: string, status: CatalogStatus) =>
+    api.patch<Category>(`/categories/${id}/status`, { status }).then((r) => r.data),
+  remove: (id: string) => api.delete<void>(`/categories/${id}`).then(() => undefined),
+}
+
+export const brandApi = {
+  list: (query: ListQuery, signal?: AbortSignal) =>
+    api.get<PageResponse<Brand>>('/brands', { params: listParams(query), signal }).then((r) => r.data),
+  options: (includeInactive: boolean, signal?: AbortSignal) =>
+    api.get<BrandOption[]>('/brands/options', { params: { includeInactive }, signal }).then((r) => r.data),
+  get: (id: string, signal?: AbortSignal) => api.get<Brand>(`/brands/${id}`, { signal }).then((r) => r.data),
+  create: (payload: BrandPayload) => api.post<Brand>('/brands', payload).then((r) => r.data),
+  update: (id: string, payload: BrandPayload) => api.put<Brand>(`/brands/${id}`, payload).then((r) => r.data),
+  setStatus: (id: string, status: CatalogStatus) =>
+    api.patch<Brand>(`/brands/${id}/status`, { status }).then((r) => r.data),
+  remove: (id: string) => api.delete<void>(`/brands/${id}`).then(() => undefined),
+}
+
+export interface AttributeQuery extends ListQuery {
+  categoryId?: string
+  dataType?: AttributeDataType | ''
+  filterable?: boolean
+}
+
+export const attributeApi = {
+  list: (query: AttributeQuery, signal?: AbortSignal) =>
+    api
+      .get<PageResponse<ProductAttribute>>('/product-attributes', {
+        params: {
+          ...listParams(query),
+          categoryId: query.categoryId || undefined,
+          dataType: query.dataType || undefined,
+          filterable: query.filterable,
+        },
+        signal,
+      })
+      .then((r) => r.data),
+  /** Attributes that apply to products in the category, including those inherited from parent categories. */
+  applicable: (categoryId: string, includeInactive: boolean, signal?: AbortSignal) =>
+    api
+      .get<ProductAttribute[]>('/product-attributes/applicable', { params: { categoryId, includeInactive }, signal })
+      .then((r) => r.data),
+  get: (id: string, signal?: AbortSignal) =>
+    api.get<ProductAttribute>(`/product-attributes/${id}`, { signal }).then((r) => r.data),
+  create: (payload: ProductAttributePayload) =>
+    api.post<ProductAttribute>('/product-attributes', payload).then((r) => r.data),
+  update: (id: string, payload: ProductAttributePayload) =>
+    api.put<ProductAttribute>(`/product-attributes/${id}`, payload).then((r) => r.data),
+  setStatus: (id: string, status: CatalogStatus) =>
+    api.patch<ProductAttribute>(`/product-attributes/${id}/status`, { status }).then((r) => r.data),
+}
+
+export interface VariantQuery extends ListQuery {
+  productId?: string
+  stock?: StockFilter | ''
+  minPrice?: string
+  maxPrice?: string
+}
+
+export const variantApi = {
+  list: (query: VariantQuery, signal?: AbortSignal) =>
+    api
+      .get<PageResponse<ProductVariant>>('/product-variants', {
+        params: {
+          ...listParams(query),
+          productId: query.productId || undefined,
+          stock: query.stock || undefined,
+          minPrice: query.minPrice || undefined,
+          maxPrice: query.maxPrice || undefined,
+        },
+        signal,
+      })
+      .then((r) => r.data),
+  get: (id: string, signal?: AbortSignal) =>
+    api.get<ProductVariant>(`/product-variants/${id}`, { signal }).then((r) => r.data),
+  create: (payload: ProductVariantPayload) =>
+    api.post<ProductVariant>('/product-variants', payload).then((r) => r.data),
+  update: (id: string, payload: ProductVariantPayload) =>
+    api.put<ProductVariant>(`/product-variants/${id}`, payload).then((r) => r.data),
+  setStatus: (id: string, status: CatalogStatus) =>
+    api.patch<ProductVariant>(`/product-variants/${id}/status`, { status }).then((r) => r.data),
 }
 
 export const chatApi = {

@@ -1,12 +1,18 @@
 import { useFieldArray, type Control, type FieldErrors, type UseFormRegister } from 'react-hook-form'
 import { Button } from '../../components/ui/Button'
-import { MAX_ATTRIBUTES, attributeTypes, type ProductFormValues } from './productForm'
+import { MAX_ATTRIBUTES, attributeTypes, type AttributeRow } from './productForm'
 
-interface AttributesEditorProps {
-  control: Control<ProductFormValues>
-  register: UseFormRegister<ProductFormValues>
-  errors: FieldErrors<ProductFormValues>
-  watchTypes: ProductFormValues['attributes']
+export interface AttributesFormShape {
+  attributes: AttributeRow[]
+}
+
+interface AttributesEditorProps<T extends AttributesFormShape> {
+  control: Control<T>
+  register: UseFormRegister<T>
+  errors: FieldErrors<T>
+  watchTypes: AttributeRow[] | undefined
+  legend?: string
+  description?: string
 }
 
 const TYPE_LABELS: Record<(typeof attributeTypes)[number], string> = {
@@ -19,21 +25,30 @@ const TYPE_LABELS: Record<(typeof attributeTypes)[number], string> = {
 const INPUT =
   'block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 aria-[invalid=true]:border-red-400'
 
-export function AttributesEditor({ control, register, errors, watchTypes }: AttributesEditorProps) {
-  const { fields, append, remove } = useFieldArray({ control, name: 'attributes' })
+export function AttributesEditor<T extends AttributesFormShape>({
+  control,
+  register,
+  errors,
+  watchTypes,
+  legend = 'Attributes',
+  description = 'Key facts such as color, size, warranty or battery life. They are included in the AI search index.',
+}: AttributesEditorProps<T>) {
+  // Every form using this editor has an `attributes` row array; narrowing the generic form type keeps paths typed.
+  const rowControl = control as unknown as Control<AttributesFormShape>
+  const rowRegister = register as unknown as UseFormRegister<AttributesFormShape>
+  const rowErrorsAll = (errors as unknown as FieldErrors<AttributesFormShape>).attributes
+  const { fields, append, remove } = useFieldArray({ control: rowControl, name: 'attributes' })
 
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium text-slate-700">Attributes</legend>
-      <p className="text-xs text-slate-500">
-        Key facts such as color, size, warranty or battery life. They are included in the AI search index.
-      </p>
+      <legend className="text-sm font-medium text-slate-700">{legend}</legend>
+      <p className="text-xs text-slate-500">{description}</p>
 
       {fields.length === 0 && <p className="text-sm text-slate-500">No attributes yet.</p>}
 
       <ul className="space-y-3">
         {fields.map((field, index) => {
-          const rowErrors = errors.attributes?.[index]
+          const rowErrors = rowErrorsAll?.[index]
           const type = watchTypes?.[index]?.type ?? 'text'
           return (
             <li key={field.id} className="grid gap-2 rounded-md border border-slate-200 p-3 sm:grid-cols-[1fr_10rem_1.5fr_auto]">
@@ -46,7 +61,7 @@ export function AttributesEditor({ control, register, errors, watchTypes }: Attr
                   placeholder="Name, e.g. color"
                   aria-invalid={rowErrors?.key ? true : undefined}
                   className={INPUT}
-                  {...register(`attributes.${index}.key`)}
+                  {...rowRegister(`attributes.${index}.key`)}
                 />
                 {rowErrors?.key && <p className="mt-1 text-xs text-red-600">{rowErrors.key.message}</p>}
               </div>
@@ -54,7 +69,7 @@ export function AttributesEditor({ control, register, errors, watchTypes }: Attr
                 <label htmlFor={`attr-type-${index}`} className="sr-only">
                   Attribute {index + 1} type
                 </label>
-                <select id={`attr-type-${index}`} className={INPUT} {...register(`attributes.${index}.type`)}>
+                <select id={`attr-type-${index}`} className={INPUT} {...rowRegister(`attributes.${index}.type`)}>
                   {attributeTypes.map((option) => (
                     <option key={option} value={option}>
                       {TYPE_LABELS[option]}
@@ -71,7 +86,7 @@ export function AttributesEditor({ control, register, errors, watchTypes }: Attr
                     id={`attr-value-${index}`}
                     aria-invalid={rowErrors?.value ? true : undefined}
                     className={INPUT}
-                    {...register(`attributes.${index}.value`)}
+                    {...rowRegister(`attributes.${index}.value`)}
                   >
                     <option value="">Select…</option>
                     <option value="true">Yes</option>
@@ -84,7 +99,7 @@ export function AttributesEditor({ control, register, errors, watchTypes }: Attr
                     inputMode={type === 'number' ? 'decimal' : undefined}
                     aria-invalid={rowErrors?.value ? true : undefined}
                     className={INPUT}
-                    {...register(`attributes.${index}.value`)}
+                    {...rowRegister(`attributes.${index}.value`)}
                   />
                 )}
                 {rowErrors?.value && <p className="mt-1 text-xs text-red-600">{rowErrors.value.message}</p>}
@@ -99,8 +114,8 @@ export function AttributesEditor({ control, register, errors, watchTypes }: Attr
         })}
       </ul>
 
-      {errors.attributes?.message && <p className="text-xs text-red-600">{errors.attributes.message}</p>}
-      {errors.attributes?.root?.message && <p className="text-xs text-red-600">{errors.attributes.root.message}</p>}
+      {rowErrorsAll?.message && <p className="text-xs text-red-600">{rowErrorsAll.message}</p>}
+      {rowErrorsAll?.root?.message && <p className="text-xs text-red-600">{rowErrorsAll.root.message}</p>}
 
       <Button
         variant="secondary"

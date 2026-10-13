@@ -68,7 +68,7 @@ class ProductControllerSecurityTest {
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         adminToken = "Bearer " + jwtService.issue(admin).token();
         userToken = "Bearer " + jwtService.issue(user).token();
-        when(productService.list(any(), any(), any(), any()))
+        when(productService.list(any(), any()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, true, true));
     }
 

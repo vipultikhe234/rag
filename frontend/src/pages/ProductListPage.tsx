@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { productApi, vectorSyncApi } from '../api/endpoints'
+import { attributeApi, brandApi, categoryApi, productApi, vectorSyncApi } from '../api/endpoints'
 import { normalizeError } from '../api/errors'
-import type { PageResponse, Product, ProductStatus } from '../api/types'
+import type { PageResponse, Product, ProductAttribute, ProductStatus } from '../api/types'
 import { useAuth } from '../auth/authContext'
 import { useToast } from '../components/toast/toastContext'
 import { Button } from '../components/ui/Button'
@@ -12,6 +12,7 @@ import { SelectField, TextField } from '../components/ui/FormField'
 import { Pagination } from '../components/ui/Pagination'
 import { LoadingBlock } from '../components/ui/Spinner'
 import { EmptyState, ErrorState, InlineAlert } from '../components/ui/States'
+import { useLoader } from '../features/catalog/hooks'
 import { StatusBadge, SyncBadge } from '../features/products/badges'
 import { VectorSyncPanel } from '../features/products/VectorSyncPanel'
 import { formatPrice } from '../lib/format'
@@ -25,6 +26,68 @@ const SORT_OPTIONS = [
   { value: 'price,desc', label: 'Price (high to low)' },
   { value: 'stockQuantity,asc', label: 'Stock (low to high)' },
 ]
+const MAX_ATTRIBUTE_FILTERS = 10
+
+/** Parses repeated `attr=slug:value` URL parameters. */
+function parseAttributeFilters(values: string[]): Record<string, string> {
+  const filters: Record<string, string> = {}
+  for (const value of values) {
+    const colon = value.indexOf(':')
+    if (colon > 0) filters[value.slice(0, colon)] = value.slice(colon + 1)
+  }
+  return filters
+}
+
+function AttributeFilter({
+  definition,
+  value,
+  onChange,
+}: {
+  definition: ProductAttribute
+  value: string
+  onChange: (value: string) => void
+}) {
+  const label = definition.unit ? `${definition.name} (${definition.unit})` : definition.name
+  if (definition.dataType === 'SELECT' || definition.dataType === 'BOOLEAN') {
+    const options =
+      definition.dataType === 'BOOLEAN'
+        ? [
+            { value: 'true', label: 'Yes' },
+            { value: 'false', label: 'No' },
+          ]
+        : definition.options.map((option) => ({ value: option, label: option }))
+    return (
+      <SelectField label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Any</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </SelectField>
+    )
+  }
+  return (
+    <TextField
+      // Re-mount when the applied value changes (e.g. filters cleared) so the input shows it.
+      key={value}
+      label={label}
+      defaultValue={value}
+      maxLength={200}
+      inputMode={definition.dataType === 'NUMBER' ? 'decimal' : undefined}
+      placeholder="Exact value"
+      onBlur={(event) => {
+        if (event.target.value.trim() !== value) onChange(event.target.value.trim())
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onChange(event.currentTarget.value.trim())
+        }
+      }}
+    />
+  )
+}
 
 export function ProductListPage() {
   const { isAdmin } = useAuth()
@@ -33,7 +96,9 @@ export function ProductListPage() {
   const [params, setParams] = useSearchParams()
 
   const q = params.get('q') ?? ''
-  const category = params.get('category') ?? ''
+  const categoryId = params.get('categoryId') ?? ''
+  const brandId = params.get('brandId') ?? ''
+  const attrKey = params.getAll('attr').join('\n')
   const status = (params.get('status') ?? '') as ProductStatus | ''
   const sort = params.get('sort') ?? 'createdAt,desc'
   const page = Math.max(0, Number(params.get('page') ?? '0') || 0)
@@ -42,7 +107,6 @@ export function ProductListPage() {
   const [data, setData] = useState<PageResponse<Product> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [categories, setCategories] = useState<string[]>([])
   const [reloadKey, setReloadKey] = useState(0)
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -51,13 +115,14 @@ export function ProductListPage() {
   const reload = useCallback(() => setReloadKey((key) => key + 1), [])
 
   const updateParams = useCallback(
-    (changes: Record<string, string | null>) => {
+    (changes: Record<string, string | string[] | null>) => {
       setParams(
         (current) => {
           const next = new URLSearchParams(current)
           for (const [key, value] of Object.entries(changes)) {
-            if (value === null || value === '') next.delete(key)
-            else next.set(key, value)
+            next.delete(key)
+            if (Array.isArray(value)) value.forEach((item) => next.append(key, item))
+            else if (value !== null && value !== '') next.set(key, value)
           }
           if (!('page' in changes)) next.delete('page')
           return next
@@ -77,8 +142,9 @@ export function ProductListPage() {
 
   useEffect(() => {
     const controller = new AbortController()
+    const attr = attrKey ? attrKey.split('\n') : []
     productApi
-      .list({ q, category, status, page, size: PAGE_SIZE, sort }, controller.signal)
+      .list({ q, categoryId, brandId, attr, status, page, size: PAGE_SIZE, sort }, controller.signal)
       .then((result) => {
         setData(result)
         setError(null)
@@ -90,14 +156,33 @@ export function ProductListPage() {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [q, category, status, page, sort, reloadKey])
+  }, [q, categoryId, brandId, attrKey, status, page, sort, reloadKey])
 
-  useEffect(() => {
-    productApi
-      .categories()
-      .then(setCategories)
-      .catch(() => setCategories([]))
-  }, [reloadKey])
+  const categories = useLoader((signal) => categoryApi.options(true, signal), 'categories')
+  const brands = useLoader((signal) => brandApi.options(true, signal), 'brands')
+  const filterDefinitions = useLoader(
+    async (signal) => ({
+      categoryId,
+      definitions: categoryId
+        ? (await attributeApi.applicable(categoryId, false, signal)).filter((d) => d.filterable)
+        : [],
+    }),
+    categoryId,
+  )
+  const attributeFilterDefs =
+    filterDefinitions.data?.categoryId === categoryId
+      ? filterDefinitions.data.definitions.slice(0, MAX_ATTRIBUTE_FILTERS)
+      : []
+  const attributeFilters = parseAttributeFilters(attrKey ? attrKey.split('\n') : [])
+
+  const setAttributeFilter = (slug: string, value: string) => {
+    const next = { ...attributeFilters, [slug]: value }
+    updateParams({
+      attr: Object.entries(next)
+        .filter(([, item]) => item !== '')
+        .map(([key, item]) => `${key}:${item}`),
+    })
+  }
 
   // Vector sync is asynchronous: refresh while any visible product is still being indexed.
   const hasPendingSync = data?.content.some((product) => product.vectorSync?.state === 'PENDING') ?? false
@@ -154,7 +239,11 @@ export function ProductListPage() {
     }
   }
 
-  const filtersActive = Boolean(q || category || status)
+  const filtersActive = Boolean(q || categoryId || brandId || attrKey || status)
+  const clearFilters = () => {
+    setSearchInput('')
+    updateParams({ q: null, categoryId: null, brandId: null, attr: null, status: null })
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -179,7 +268,7 @@ export function ProductListPage() {
 
       <Card>
         <form
-          className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_1fr]"
+          className="grid gap-4 md:grid-cols-3 xl:grid-cols-[2fr_1.5fr_1fr_1fr_1fr]"
           role="search"
           aria-label="Filter products"
           onSubmit={(event) => {
@@ -195,11 +284,26 @@ export function ProductListPage() {
             maxLength={100}
             onChange={(event) => setSearchInput(event.target.value)}
           />
-          <SelectField label="Category" value={category} onChange={(event) => updateParams({ category: event.target.value })}>
+          <SelectField
+            label="Category"
+            hint="Includes subcategories."
+            value={categoryId}
+            onChange={(event) => updateParams({ categoryId: event.target.value, attr: null })}
+          >
             <option value="">All categories</option>
-            {categories.map((item) => (
-              <option key={item} value={item}>
-                {item}
+            {(categories.data ?? []).map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.path}
+                {option.status === 'INACTIVE' ? ' (inactive)' : ''}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Brand" value={brandId} onChange={(event) => updateParams({ brandId: event.target.value })}>
+            <option value="">All brands</option>
+            {(brands.data ?? []).map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+                {option.status === 'INACTIVE' ? ' (inactive)' : ''}
               </option>
             ))}
           </SelectField>
@@ -216,6 +320,23 @@ export function ProductListPage() {
             ))}
           </SelectField>
         </form>
+
+        {attributeFilterDefs.length > 0 && (
+          <fieldset className="mt-4 border-t border-slate-100 pt-4">
+            <legend className="sr-only">Attribute filters</legend>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Filter by attribute</p>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-5">
+              {attributeFilterDefs.map((definition) => (
+                <AttributeFilter
+                  key={definition.id}
+                  definition={definition}
+                  value={attributeFilters[definition.slug] ?? ''}
+                  onChange={(value) => setAttributeFilter(definition.slug, value)}
+                />
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         <div className="mt-6">
           {loading && !data ? (
@@ -234,13 +355,7 @@ export function ProductListPage() {
               }
               action={
                 filtersActive ? (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setSearchInput('')
-                      updateParams({ q: null, category: null, status: null })
-                    }}
-                  >
+                  <Button variant="secondary" onClick={clearFilters}>
                     Clear filters
                   </Button>
                 ) : undefined
