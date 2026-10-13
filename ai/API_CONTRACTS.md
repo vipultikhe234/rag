@@ -31,21 +31,43 @@ Catalog endpoints below were verified against a running server on a scratch DB (
 | GET/PATCH/DELETE | `/chat/conversations[/{id}]`, GET `/chat/conversations/{id}/messages` | owner only |
 | GET/POST | `/admin/vector-sync/status|events|retry/{eventId}|retry-failed|resync-missing` | admin |
 
-### Products changes (catalog integration)
-- Request adds `categoryId`, `brandId` (UUID). Category: `categoryId` or legacy `category` name (must match an
-  existing category, case-insensitive); one required. Brand optional, same pattern.
-  Errors: `categoryId`/`category`/`brandId`/`brand` field errors (unknown, inactive when newly assigned).
-- `attributes` values validated against applicable attribute definitions (keyed by slug), field
-  `attributes.<slug>`; required active attributes enforced.
-- Response adds `categoryId`, `brandId`.
-- List adds `categoryId` (includes subcategories), `brandId`, repeated `attr=slug:value` (max 10).
-- SKU must not collide with a variant SKU.
+### Products `/products`
+- Body `ProductRequest`: `name*, sku*, slug (max 200, lowercase-hyphen; generated from name when blank), description,
+  categoryId | category*, brandId | brand, price, currency, stockQuantity, attributes, status, version,
+  hasVariants, images[] (max 20, {id?, url* http/https, altText}), options[] (max 3, see below),
+  variants[] (max 100, `VariantDraft`)`.
+  - Category: `categoryId` or legacy `category` name (case-insensitive); must be assignable (it and all
+    ancestors active) when newly assigned. Brand optional, same pattern.
+  - Simple product (`hasVariants=false`): `price` and `stockQuantity` required; `options`/`variants` rejected.
+  - Variant product: needs >= 1 option and >= 1 variant on create; submitted price/stock are ignored —
+    `price` = lowest active variant price, `stockQuantity` = sum of active variant stock (kept in sync).
+  - Create with variants is one transaction: product, images, options, variants all succeed or nothing is saved.
+  - Update: omitted `images`/`options`/`hasVariants` are kept; `variants` only adds new variants (existing ones
+    are edited via `/product-variants`). Turning a product with variants simple -> 409 `PRODUCT_HAS_VARIANTS`.
+  - `attributes` validated against applicable definitions (keyed by slug), field `attributes.<slug>`; required
+    active attributes enforced. Variant draft field errors use `variants[i].<field>`.
+- Response adds `slug, hasVariants, images[{id,url,altText,position}], options[{id,name,attributeId,unit,position,
+  values[{id,value,position}]}], variantSummary{count, activeCount, minPrice, maxPrice}` (null for simple products).
+- List params: `q`, `category`, `categoryId` (includes subcategories), `brandId`, `status`, repeated
+  `attr=slug:value` (max 10), `minPrice`/`maxPrice` (>= 0; matches the simple price or any active variant price),
+  `stock=AVAILABLE|IN_STOCK|LOW_STOCK|OUT_OF_STOCK` (active-variant total for variant products), `hasVariants`,
+  paging; sort `name|sku|slug|category|brand|price|stockQuantity|status|createdAt|updatedAt`.
+- `GET /products/{id}/variants` -> list of `ProductVariantResponse`.
+- `POST /products/{id}/variants` (admin) body `{variants: VariantDraft[1..100]}` -> 201 list; all or nothing.
+- Codes: `SKU_ALREADY_EXISTS` (product or variant SKU), `SLUG_ALREADY_EXISTS`, `PRODUCT_HAS_VARIANTS`
+  (delete or make simple), `CONCURRENT_MODIFICATION`, `OPTION_IN_USE` / `OPTION_VALUE_IN_USE` (removing an option
+  or value still used by a variant).
+
+### Options (part of the product body)
+`{id?, name* (max 50), attributeId?, values* [1..50] {id?, value* (max 100)}}`. Max 3 options per product.
+Existing options/values are matched by `id`, otherwise by text (case-insensitive). A linked SELECT attribute
+restricts values to its options and canonicalises their casing; a NUMBER attribute's unit is appended to labels.
 
 ## Categories `/categories`
 | Method | Path | Params / body |
 |--------|------|---------------|
 | GET | `/categories` | `q`, `status`, `parentId`, `rootsOnly`, paging; sort `name|slug|status|createdAt|updatedAt` (default `name,asc`) |
-| GET | `/categories/options` | `includeInactive` -> `[{id,name,slug,parentId,path,status}]` |
+| GET | `/categories/options` | `includeInactive` -> `[{id,name,slug,parentId,path,status,assignable}]`; `assignable=false` when it or an ancestor is inactive |
 | GET | `/categories/{id}` | |
 | POST / PUT / PATCH | `/categories`, `/categories/{id}` | `{name*, slug, description, imageUrl, parentId, status, version}` |
 | PATCH | `/categories/{id}/status` | |
@@ -53,7 +75,8 @@ Catalog endpoints below were verified against a running server on a scratch DB (
 
 Response: `id,name,slug,description,imageUrl,parentId,parentName,status,productCount,subcategoryCount,
 attributeCount,version,createdAt,updatedAt`. Codes: `CATEGORY_ALREADY_EXISTS`, `SLUG_ALREADY_EXISTS`,
-`parentId` field errors (self, missing, cycle, inactive).
+`parentId` field errors (self, missing, cycle, inactive or under an inactive ancestor). Deactivating a parent blocks
+new assignments to its whole subtree; reactivating it makes active subcategories assignable again.
 
 ## Brands `/brands`
 Same shape as categories without hierarchy. Body `{name*, slug, description, logoUrl, websiteUrl, status,
@@ -61,19 +84,34 @@ version}` (URLs http/https). List `q`, `status`. `GET /brands/options`. DELETE -
 Response includes `productCount`. Codes: `BRAND_ALREADY_EXISTS`, `SLUG_ALREADY_EXISTS`.
 
 ## Product attributes `/product-attributes` (no DELETE)
-- GET list: `q`, `categoryId`, `dataType`, `status`, `filterable`, paging; sort `name|slug|dataType|status|createdAt|updatedAt`.
-- GET `/product-attributes/applicable?categoryId=&includeInactive=` -> own + inherited attributes, root first.
-- POST/PUT body `{categoryId*, name*, slug, dataType* (STRING|NUMBER|BOOLEAN|SELECT), options[], unit,
-  required, filterable, status, version}`; SELECT needs 1-50 distinct options, others none.
-- Codes: `ATTRIBUTE_ALREADY_EXISTS` (name in category, or slug in category hierarchy), `ATTRIBUTE_NOT_FOUND`.
-- Response: `id,categoryId,categoryName,name,slug,dataType,options,unit,required,filterable,status,version,...`.
+- GET list: `q`, `categoryId` (attributes assigned to that category), `dataType`, `status`, `required`,
+  `filterable`, paging; sort `name|slug|dataType|status|createdAt|updatedAt`.
+- GET `/product-attributes/applicable?categoryId=&includeInactive=` -> attributes of the category and its ancestors,
+  root first.
+- POST/PUT body `{categoryIds[] (1..20) | categoryId (legacy), name*, slug (max 64), dataType*
+  (STRING|NUMBER|BOOLEAN|SELECT), options[], unit, required, filterable, status, version}`; SELECT needs 1-50
+  distinct options, others none. Newly assigned categories must be assignable.
+- Name (case-insensitive) and slug are globally unique. Codes: `ATTRIBUTE_ALREADY_EXISTS` (name),
+  `SLUG_ALREADY_EXISTS` (slug), `ATTRIBUTE_NOT_FOUND`.
+- Response: `id, categories[{id,name,active}], name, slug, dataType, options, unit, required, filterable, status,
+  version, ...`.
 
 ## Product variants `/product-variants` (no DELETE)
-- GET list: `q` (variant/product name or SKU), `productId`, `sku`, `status`, `minPrice`, `maxPrice`,
-  `stock=AVAILABLE|IN_STOCK|LOW_STOCK|OUT_OF_STOCK`, paging; sort
+Variants are deactivated (`PATCH /{id}/status`), never deleted.
+- GET list: `q` (variant title, product name or SKU), `productId`, `sku`, `status`, `minPrice`, `maxPrice`,
+  `stock=AVAILABLE|IN_STOCK|LOW_STOCK|OUT_OF_STOCK`, `categoryId` (includes subcategories), `brandId`, repeated
+  `option=Name:Value` (max 5; name 1-50, value 1-100 chars, else 400 `INVALID_PARAMETER`), paging; sort
   `sku|variantName|productName|price|stockQuantity|status|createdAt|updatedAt` (default `createdAt,desc`).
-- POST/PUT body `{productId*, sku*, variantName*, attributes, price*, salePrice, stockQuantity*, status, version}`.
-- Rules: product exists (and active when newly linked); SKU unique across variants and products
-  (409 `SKU_ALREADY_EXISTS`); `salePrice < price`; stock 0..1e9.
-- Response adds `productName, productSku, productStatus, currency, effectivePrice, stockLevel`
+- POST body `ProductVariantRequest {productId*, sku*, options{name: value} (max 3), attributes, price*,
+  compareAtPrice, stockQuantity*, barcode, imageId, status, version}`; PUT/PATCH same body (product cannot change).
+  `VariantDraft` (inside product/batch requests) is the same without `productId`/`version`, plus `imageUrl`
+  (matched to one of the product's images).
+- Rules: product must be a variant product (active when newly linked); options must match the product's options
+  exactly (one value each); SKU unique across variants and products; barcode unique when set;
+  `compareAtPrice > price`; stock 0..1e9; `imageId` must belong to the product. The variant title is generated
+  from the option values (`Black / M`).
+- Codes: `SKU_ALREADY_EXISTS`, `BARCODE_ALREADY_EXISTS`, `VARIANT_COMBINATION_EXISTS`, `CONCURRENT_MODIFICATION`.
+- Response: `id, productId, productName, productSku, productStatus, categoryId, category, brandId, brand, currency,
+  sku, variantName, options[{optionId,name,valueId,value,label}], attributes, price, compareAtPrice, onSale,
+  stockQuantity, stockLevel, barcode, imageId, imageUrl, status, version, createdAt, updatedAt`
   (`LOW_STOCK` = 1..`app.products.low-stock-threshold`, default 5).

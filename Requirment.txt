@@ -466,3 +466,26 @@ Nike (SKU: NIKE-REV7)
 Levi's (SKU: LEVI-TEE-CN)
 
 but we have 41 brand then why i get only 2 my suggestion is that i want exact correct answer chech embedding properly 
+
+
+Verify these issues exist and fix them:
+
+Bug 1:
+When resolving variant option values, the code canonicalizes the user's input (e.g., converting "256.0" to "256" for NUMBER attributes) for matching against stored values. However, if the canonicalized value doesn't match, the error message reports the original `requested` value instead of the `wanted` (canonicalized) value that was actually compared. This creates a mismatch between what was searched for and what the error message claims, potentially confusing users about why their input was rejected.
+
+Bug 2:
+When constructing a `ProductAttributeRequest` for testing, the code generates random UUIDs for category IDs instead of mapping the category slugs to the actual category IDs that exist in the test fixture. At line 124, `assigned.stream().map(s -> UUID.randomUUID()).toList()` creates random UUIDs, ignoring the `categoryIds` map that was populated with the correct mappings. This causes the test to validate attributes against non-existent category IDs, defeating the purpose of the fixture validation.
+
+Affected files:
+- backend/src/main/java/com/productrag/catalog/option/ProductOptionService.java (lines 362-372)
+- backend/src/main/java/com/productrag/catalog/option/ProductOptionService.java (lines 296-306)
+- backend/src/test/java/com/productrag/catalog/CatalogFixturesTest.java (lines 121-155)
+- backend/src/test/java/com/productrag/catalog/CatalogFixturesTest.java (lines 149-155)
+
+Verify these issues exist and fix them:
+
+Bug 1:
+The route for `/products/:id` is defined before `/products/:id/edit`, which means the parametric route will match edit URLs (e.g., `/products/123/edit` matches with id='123/edit'). This prevents the edit route from ever being reached. The more specific edit route must be defined before the generic details route.
+
+Affected files:
+- frontend/src/App.tsx (lines 82-109)
