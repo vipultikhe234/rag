@@ -1,7 +1,7 @@
 package com.productrag.product;
 
+import com.productrag.common.api.PageRequests;
 import com.productrag.common.api.PageResponse;
-import com.productrag.common.exception.BadRequestException;
 import com.productrag.product.dto.ProductRequest;
 import com.productrag.product.dto.ProductResponse;
 import com.productrag.product.dto.ProductStatusRequest;
@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -98,20 +97,6 @@ public class ProductController {
     }
 
     static PageRequest pageRequest(int page, int size, String sort) {
-        if (page < 0) {
-            throw new BadRequestException("INVALID_PARAMETER", "page must be >= 0");
-        }
-        if (size < 1 || size > 100) {
-            throw new BadRequestException("INVALID_PARAMETER", "size must be between 1 and 100");
-        }
-        String[] parts = sort.split(",");
-        String property = SORTABLE.get(parts[0].trim());
-        if (property == null) {
-            throw new BadRequestException("INVALID_PARAMETER", "Unsupported sort property '" + parts[0].trim()
-                    + "'. Allowed: " + String.join(", ", SORTABLE.keySet()));
-        }
-        Sort.Direction direction = parts.length > 1 && parts[1].trim().equalsIgnoreCase("asc")
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-        return PageRequest.of(page, size, Sort.by(direction, property).and(Sort.by(Sort.Direction.ASC, "id")));
+        return PageRequests.of(page, size, sort, SORTABLE);
     }
 }

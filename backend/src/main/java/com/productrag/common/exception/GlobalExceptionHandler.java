@@ -42,8 +42,10 @@ public class GlobalExceptionHandler {
             log.warn("Request {} {} failed: {} ({})", request.getMethod(), request.getRequestURI(), ex.getCode(),
                     ex.getMessage());
         }
+        List<ApiError.FieldViolation> violations = ex instanceof FieldValidationException fields
+                ? fields.getViolations() : List.of();
         return builder.body(ApiErrorWriter.build(ex.getStatus(), ex.getCode(), ex.getMessage(),
-                request.getRequestURI(), List.of()));
+                request.getRequestURI(), violations));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -116,6 +118,25 @@ public class GlobalExceptionHandler {
         if (detail.contains("uq_app_users_email")) {
             return error(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "A user with this email already exists",
                     request);
+        }
+        if (detail.contains("uq_product_variants_sku")) {
+            return error(HttpStatus.CONFLICT, "SKU_ALREADY_EXISTS", "A variant with this SKU already exists", request);
+        }
+        if (detail.contains("uq_categories_")) {
+            return error(HttpStatus.CONFLICT, "CATEGORY_ALREADY_EXISTS",
+                    "A category with this name or slug already exists", request);
+        }
+        if (detail.contains("uq_brands_")) {
+            return error(HttpStatus.CONFLICT, "BRAND_ALREADY_EXISTS", "A brand with this name or slug already exists",
+                    request);
+        }
+        if (detail.contains("uq_product_attributes_")) {
+            return error(HttpStatus.CONFLICT, "ATTRIBUTE_ALREADY_EXISTS",
+                    "This category already has an attribute with this name or slug", request);
+        }
+        if (detail.contains("foreign key")) {
+            return error(HttpStatus.CONFLICT, "RECORD_IN_USE",
+                    "The record is referenced by other records and cannot be changed this way", request);
         }
         log.warn("Data integrity violation on {} {}", request.getMethod(), request.getRequestURI());
         return error(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION",

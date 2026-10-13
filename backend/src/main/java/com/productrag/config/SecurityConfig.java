@@ -29,6 +29,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    /** Catalog resources: any signed-in user may read, only admins may write. */
+    private static final String[] CATALOG_PATHS = {
+            "/api/v1/products", "/api/v1/products/**",
+            "/api/v1/categories", "/api/v1/categories/**",
+            "/api/v1/brands", "/api/v1/brands/**",
+            "/api/v1/product-attributes", "/api/v1/product-attributes/**",
+            "/api/v1/product-variants", "/api/v1/product-variants/**"};
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService,
                                                    AppUserRepository userRepository,
@@ -55,8 +63,8 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/products", "/api/v1/products/**").authenticated()
-                        .requestMatchers("/api/v1/products", "/api/v1/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, CATALOG_PATHS).authenticated()
+                        .requestMatchers(CATALOG_PATHS).hasRole("ADMIN")
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, userRepository),
