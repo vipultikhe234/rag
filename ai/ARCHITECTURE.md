@@ -39,6 +39,25 @@ Details: `docs/architecture.md`, `docs/rag-flow.md`, `docs/vector-sync.md`.
   `AttributeValueValidator`. Keys without a definition remain allowed (free-form, backward compatible).
 - Variant -> Product (`product_id`, RESTRICT). Products with variants cannot be deleted.
 
+## Product management design (V4, planned; see `ai/RESEARCH.md`)
+- Product = shared identity (name, slug, description, category, brand, images, specs `attributes`, status).
+  Simple product (`hasVariants=false`): product-level SKU, price, stock. Variant product: options (max 3,
+  values max 50 each) and variants (max 100); each variant = one option combination with SKU, price,
+  compare-at price, stock, barcode, image, status. Product price/stock = backend summary (not editable).
+- Attributes (specs) are global definitions linked to categories; an option may link to an attribute so its
+  values are validated/reused (SELECT options, NUMBER values).
+- Create flow: `POST /products` with `options` + `variants` -> one transaction: validate category (self and
+  ancestors active), brand, specs, options, combinations, SKUs (request + DB), then insert product, images,
+  options, values, variants, variant options, summary, outbox event. Any failure rolls back everything.
+- Variant writes lock the product row (`PESSIMISTIC_WRITE`) so the summary and combination checks are
+  serialized per product; the summary update does not bump the product `version`.
+- Product edit: `PUT /products/{id}` updates fields, images (matched by id/url to keep variant references),
+  options (rename values, add values/options; a new option gives existing variants its first value; values
+  in use cannot be removed); `variants` in the body creates additional variants. Variant product -> simple is
+  refused once variants exist.
+- Inactive rules: category assignable only when it and all ancestors are active; inactive brand/attribute/
+  product/variant keep existing references; nothing referenced is hard-deleted.
+
 ## Auth
 - `POST /api/v1/auth/login` returns a JWT; `JwtAuthenticationFilter` reloads the user per request.
 - `SecurityConfig`: GET on catalog paths (`/products`, `/categories`, `/brands`, `/product-attributes`,

@@ -9,8 +9,7 @@ import java.util.UUID;
 
 public record ProductAttributeResponse(
         UUID id,
-        UUID categoryId,
-        String categoryName,
+        List<CategoryRef> categories,
         String name,
         String slug,
         AttributeDataType dataType,
@@ -23,10 +22,14 @@ public record ProductAttributeResponse(
         Instant createdAt,
         Instant updatedAt) {
 
-    public static ProductAttributeResponse from(ProductAttribute attribute, String categoryName) {
-        return new ProductAttributeResponse(attribute.getId(), attribute.getCategoryId(), categoryName,
-                attribute.getName(), attribute.getSlug(), attribute.getDataType(), List.copyOf(attribute.getOptions()),
-                attribute.getUnit(), attribute.isRequired(), attribute.isFilterable(), attribute.getStatus(),
-                attribute.getVersion(), attribute.getCreatedAt(), attribute.getUpdatedAt());
+    /** An assigned category; {@code active} is the category's own status. */
+    public record CategoryRef(UUID id, String name, boolean active) {
+    }
+
+    public static ProductAttributeResponse from(ProductAttribute attribute, List<CategoryRef> categories) {
+        return new ProductAttributeResponse(attribute.getId(), categories, attribute.getName(), attribute.getSlug(),
+                attribute.getDataType(), List.copyOf(attribute.getOptions()), attribute.getUnit(),
+                attribute.isRequired(), attribute.isFilterable(), attribute.getStatus(), attribute.getVersion(),
+                attribute.getCreatedAt(), attribute.getUpdatedAt());
     }
 }

@@ -9,7 +9,10 @@ Catalog endpoints below were verified against a running server on a scratch DB (
 - Errors `ApiError`: `timestamp`, `status`, `error`, `code`, `message`, `path`, `fieldErrors[{field,message}]`.
   Common codes: `VALIDATION_FAILED` (400, with fieldErrors), `INVALID_PARAMETER` (400), `*_NOT_FOUND` (404),
   `*_ALREADY_EXISTS` / `SLUG_ALREADY_EXISTS` / `SKU_ALREADY_EXISTS` (409), `CONCURRENT_MODIFICATION` (409),
-  `RECORD_IN_USE` (409), 401 unauthenticated, 403 not admin.
+  `RECORD_IN_USE` (409), 401 unauthenticated, 403 not admin. AI calls (embeddings, chat):
+  `AI_PROVIDER_UNREACHABLE` (503, provider not running / unknown host), `AI_PROVIDER_UNAVAILABLE` (503, timeout,
+  429, 5xx), `AI_PROVIDER_NOT_CONFIGURED` (503), `AI_PROVIDER_ERROR` / `AI_PROVIDER_QUOTA_EXCEEDED` /
+  `AI_PROVIDER_EMPTY_RESPONSE` (502).
 - Auth: GET = any authenticated user; POST/PUT/PATCH/DELETE = `ADMIN`.
 - Update bodies are full representations; send `version` for optimistic locking. Catalog resources accept both
   `PUT /{id}` and `PATCH /{id}` for updates (same body).

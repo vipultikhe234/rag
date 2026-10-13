@@ -1,0 +1,461 @@
+1. # Implementation Prompt: Complete E-Commerce Semantic Search and Embedding Synchronization
+
+## 1. Role and objective
+
+Act as a Senior Java/Spring Boot AI Engineer, RAG Architect, Database Engineer, and E-Commerce Backend Developer.
+
+I want to implement a production-oriented semantic search system for my existing e-commerce admin panel.
+
+The source of truth is my existing application database. The system manages:
+
+1. Products
+2. Brands
+3. Categories and subcategories
+4. Product attributes and attribute values
+5. Product variants
+
+The semantic search system must use the relationships between these entities to retrieve relevant products without creating unnecessary duplicate embeddings.
+
+Do not immediately start coding. First inspect the existing project, research relevant official documentation, understand the database relationships, and propose an implementation plan.
+
+## 2. Research and project inspection
+
+Before implementing anything:
+
+- Research official documentation for the current embedding provider, vector database, and framework used by the project.
+- Inspect the existing database schema and Product, Brand, Category, Attribute, and Variant models.
+- Identify how products reference brands and categories.
+- Identify how product attribute values are stored.
+- Identify how variants store SKUs, option combinations, prices, and stock.
+- Inspect existing product create, update, and deactivate APIs.
+- Inspect existing authentication, validation, migrations, and background job infrastructure.
+- Inspect existing `ai/` documentation and `.cursor/rules/`.
+- Reuse existing integrations wherever possible.
+
+Do not assume the project uses PostgreSQL, MongoDB, pgvector, or a particular embedding provider until verified.
+
+If the project is a Java/Spring Boot application, follow its existing architecture. If it uses NestJS or another framework, follow the actual codebase instead of rewriting it in a different framework.
+
+Record findings and design decisions in `ai/RESEARCH.md`, `ai/ARCHITECTURE.md`, `ai/DATABASE.md`, and `ai/REQUIREMENTS.md`.
+
+## 3. Embedding strategy
+
+Implement the following entity-specific strategy.
+
+### A. Product embeddings — required
+
+Products are the primary semantic search targets.
+
+Generate an embedding from a normalized product search document containing relevant information such as:
+
+- Product name
+- Product description
+- Category and subcategory names
+- Brand name
+- Relevant product specifications
+- Important product features
+- A concise summary of variant options when useful
+
+Example source data:
+
+Product:
+- Name: Samsung Galaxy S Series
+- Description: Smartphone with an advanced camera and display.
+- Category: Mobile Phones
+- Brand: Samsung
+- RAM: 12 GB
+- Variants:
+  - 256 GB storage, Black
+  - 256 GB storage, Blue
+  - 512 GB storage, Black
+
+Example normalized search text:
+
+"Samsung Galaxy S Series smartphone. Category: Mobile Phones. Brand: Samsung. Specifications: RAM 12 GB. Available options include 256 GB storage in Black and Blue, and 512 GB storage in Black."
+
+Generate one primary embedding per product, unless the existing requirements justify multiple embeddings for different product sections.
+
+Do not generate a new embedding on every user search. Store and reuse product embeddings until their source content changes.
+
+### B. Brand embeddings — optional and requirement-driven
+
+Support separate brand embeddings only when semantic brand discovery is required.
+
+Example query:
+"Which brands make reliable gaming laptops?"
+
+A brand search document may contain:
+
+- Brand name
+- Brand description
+- Product categories served, if available
+- Relevant brand metadata
+
+Do not automatically create brand embeddings just because a brand record exists.
+
+If the application only needs to find products belonging to a particular brand, use product embeddings with structured brand IDs or exact brand filters.
+
+### C. Category embeddings — optional and requirement-driven
+
+Support separate category embeddings when users need semantic category discovery.
+
+A category search document may contain:
+
+- Category name
+- Category description
+- Parent category
+- Relevant child category names
+
+Do not create category embeddings solely to filter products by category. Use category IDs and structured filters for exact category matching.
+
+When a category or parent category changes, update affected product search documents where the category information appears in their searchable text.
+
+### D. Attribute embeddings — generally not required
+
+Store attribute definitions and values in the source database.
+
+Examples:
+- RAM: 12 GB
+- Storage: 512 GB
+- Color: Black
+- Material: Cotton
+- Screen size: 15.6 inches
+
+Include relevant attribute names and values in product search text.
+
+Do not create an embedding for every attribute definition or attribute value by default.
+
+If future requirements include semantic attribute discovery, implement it as a separate capability rather than mixing attribute embeddings into the product vector collection without a clear use case.
+
+### E. Variant embeddings — generally not required initially
+
+Variants represent purchasable combinations of product options.
+
+Examples:
+- Samsung phone, 256 GB, Black
+- Samsung phone, 512 GB, Blue
+- T-shirt, Large, Cotton, Blue
+
+Store variant information in structured records.
+
+Include a concise variant summary in the parent product's search document when useful. Do not include every variant if doing so creates excessively large documents or reduces search relevance.
+
+Do not create one vector per variant by default.
+
+For exact SKU search, option matching, current price, and stock availability, query the authoritative product variant and inventory records.
+
+If later requirements demand independent semantic retrieval of variants, design a separate variant-indexing strategy with a clear justification.
+
+## 4. Vector storage design
+
+Inspect the existing database and select the appropriate vector storage mechanism.
+
+If PostgreSQL and pgvector are already used or selected, evaluate a dedicated table such as `product_embeddings`.
+
+If MongoDB Atlas Vector Search is used, evaluate the existing collection and vector index design.
+
+The stored embedding record should contain the fields appropriate to the selected database, including:
+
+- Embedding record ID
+- Entity type
+- Source entity ID
+- Normalized searchable text or its version/hash
+- Embedding vector
+- Embedding model identifier
+- Embedding dimensions
+- Source content version or hash
+- Indexing status
+- Last successful indexing timestamp
+- Error details where appropriate
+
+For a product-first implementation, use a dedicated product embedding collection or table. Add separate brand or category embedding storage only if those semantic discovery features are approved.
+
+Maintain unique constraints or equivalent safeguards to prevent duplicate current embedding records for the same product and embedding configuration.
+
+Do not store sensitive user information in embedding documents.
+
+## 5. Embedding provider
+
+Inspect the current project's provider and configuration before implementation.
+
+If no provider exists, propose an appropriate provider and document the trade-offs between hosted APIs and local embedding models.
+
+Requirements:
+
+- Keep API keys in environment variables or the existing secrets mechanism.
+- Never hardcode API keys.
+- Configure the embedding model through application configuration.
+- Use the same compatible model and vector dimensions for indexing and query embeddings.
+- Validate the vector dimension before saving or querying.
+- Handle provider timeouts, rate limits, and temporary failures.
+- Add bounded retries and appropriate error handling.
+- Avoid silently changing embedding models.
+- If the embedding model changes, support a controlled re-embedding and index migration process.
+
+Do not regenerate all embeddings on every application startup.
+
+## 6. Product indexing and synchronization
+
+Create a centralized product indexing service.
+
+Its responsibilities should include:
+
+1. Load the product and relevant related records.
+2. Verify that the product is eligible for indexing.
+3. Construct a deterministic normalized search document.
+4. Compute a content hash or version.
+5. Skip embedding generation if the searchable content has not changed.
+6. Generate the embedding when required.
+7. Upsert the embedding using a stable product identifier.
+8. Record indexing status and errors.
+9. Prevent duplicate processing from creating duplicate records.
+
+Implement synchronization for these events:
+
+### Product created
+
+Create or schedule a product indexing job after the product has been saved successfully.
+
+### Product updated
+
+Regenerate the embedding only when searchable product content changes, such as name, description, category, brand, or relevant specifications.
+
+### Brand updated
+
+When a brand name or description changes, identify affected products.
+
+Rebuild their search documents and regenerate their embeddings only when the normalized product text changes.
+
+### Category updated
+
+When a category name or description used by product search changes, identify affected products and refresh their search documents.
+
+Handle parent category changes and category hierarchy updates correctly.
+
+### Attribute value updated
+
+When a product's searchable attribute values change, refresh that product's search document.
+
+Do not regenerate embeddings for unrelated products.
+
+### Variant created, updated, or deactivated
+
+Rebuild the parent product's variant summary when appropriate.
+
+Do not regenerate the product embedding for a stock-only or price-only update unless those values are intentionally part of the searchable semantic text.
+
+Maintain current prices and inventory in structured storage rather than relying on potentially stale embedded text.
+
+### Product deactivated
+
+Prevent the product from appearing in normal user search results.
+
+Use an indexed status filter, source-database eligibility check, or equivalent reliable mechanism.
+
+Preserve historical data and embedding records according to the project's retention policy.
+
+### Product reactivated
+
+Make the product eligible for indexing and normal search again. Verify that its embedding is current.
+
+## 7. Reliable asynchronous processing
+
+If embedding generation uses an external provider or a local model that may take significant time, do not unnecessarily block admin CRUD requests.
+
+Evaluate a background job or transactional outbox approach.
+
+Where transactional outbox is appropriate:
+
+1. Save the product changes and an indexing event in the same database transaction.
+2. A worker reads pending indexing events.
+3. The worker loads the latest product data.
+4. It builds the normalized search document.
+5. It generates the embedding.
+6. It upserts the vector record.
+7. It marks the event as completed.
+
+Implement retry handling for transient failures, bounded exponential backoff where appropriate, idempotency, error logging, and a mechanism to inspect failed jobs.
+
+Prevent old jobs from overwriting newer product embeddings. Use a version or content-hash check before applying results.
+
+Do not implement a separate queue or outbox if the existing infrastructure already provides the required reliability. Explain the selected design in the architecture documentation.
+
+## 8. Semantic search API
+
+Implement a semantic product search API consistent with the existing application.
+
+Example conceptual endpoint:
+
+`GET /api/products/semantic-search?q=<query>`
+
+Adapt the actual route and response to the project's API conventions.
+
+Search flow:
+
+1. Validate the query.
+2. Generate an embedding for the query.
+3. Perform vector similarity search.
+4. Retrieve candidate product IDs and similarity scores.
+5. Apply active product, category, brand, and other supported filters.
+6. Retrieve authoritative product and variant details.
+7. Validate current status, price, and stock where required.
+8. Return ranked products with relevant information and pagination where supported.
+
+Example query:
+
+"Find a Samsung phone with 512 GB storage."
+
+The system should identify semantically relevant products and use structured filters or variant-level checks to verify the requested brand and storage configuration.
+
+Do not rely on embedding similarity alone for exact constraints such as:
+
+- Brand ID
+- Category ID
+- SKU
+- Price range
+- Exact storage capacity
+- Available stock
+- Product status
+
+Where appropriate, use hybrid retrieval combining vector similarity and structured or lexical search.
+
+Do not use an LLM simply to perform vector similarity search. An LLM is optional for query interpretation, reranking, or generating a natural-language response when there is a clear benefit.
+
+## 9. Structured search and entity discovery
+
+Keep product retrieval distinct from brand or category discovery.
+
+Initially implement:
+
+- Product semantic search using product embeddings.
+- Brand filtering using structured brand data.
+- Category filtering using structured category data.
+- Attribute filtering using structured attribute values.
+- Variant filtering using structured option and inventory records.
+
+If the requirements explicitly include semantic discovery of brands or categories, implement their independent indexes as separate capabilities.
+
+Do not create embeddings for brands, categories, attributes, and variants automatically without identifying a user-facing search use case.
+
+Document which entity types are indexed and why.
+
+## 10. Reindexing and data repair
+
+Implement an administrative or internal process for:
+
+- Indexing products that have no embedding.
+- Retrying failed indexing jobs.
+- Rebuilding embeddings after a model change.
+- Refreshing stale records.
+- Comparing source content hashes against indexed content hashes.
+- Reporting indexing progress and errors.
+
+Support safe batch processing with pagination or cursor-based iteration.
+
+Avoid loading the entire product catalog into memory.
+
+Make reindexing resumable and idempotent.
+
+Do not delete valid embeddings before replacement embeddings have been generated successfully when a safe replacement workflow is possible.
+
+## 11. Performance and database safety
+
+- Add the indexes required by the chosen vector database.
+- Use the similarity metric supported by the selected model and database configuration.
+- Keep vector dimensions consistent.
+- Use bounded candidate counts and result limits.
+- Use pagination or an appropriate continuation strategy.
+- Avoid N+1 queries when loading product relationships.
+- Keep the source database authoritative for prices, stock, and current eligibility.
+- Avoid synchronous embedding generation on every read request.
+- Do not reset or refresh a shared test database without approval.
+- Do not run destructive migrations or indexing jobs against production without explicit approval.
+
+## 12. Tests
+
+Write tests using the existing test framework.
+
+Cover:
+
+- Product embedding creation.
+- Product embedding update when searchable content changes.
+- No unnecessary embedding regeneration when content is unchanged.
+- Brand and category changes refreshing affected product documents.
+- Attribute changes refreshing only relevant products.
+- Variant changes refreshing summaries when necessary.
+- Stock-only changes not unnecessarily regenerating embeddings.
+- Product deactivation and reactivation.
+- Vector dimension validation.
+- Duplicate indexing events and idempotency.
+- Retry and failure recovery.
+- Stale job protection.
+- Semantic retrieval with structured filters.
+- Exact SKU and stock verification.
+- Reindexing and missing-embedding repair.
+
+Use mocked embedding-provider responses in unit tests where appropriate and isolated database tests for integration behavior.
+
+Do not claim tests passed unless they were executed.
+
+## 13. Token-saving AI documentation
+
+Maintain the existing `ai/` folder and update:
+
+- `ai/RESEARCH.md`
+- `ai/ARCHITECTURE.md`
+- `ai/DATABASE.md`
+- `ai/API_CONTRACTS.md`
+- `ai/REQUIREMENTS.md`
+- `ai/TASKS.md`
+- `ai/CHANGELOG.md`
+- `ai/TESTING.md`
+
+Add concise context files if needed:
+
+- `ai/context/product-embeddings.md`
+- `ai/context/embedding-sync.md`
+- `ai/context/semantic-search.md`
+
+Keep the documents factual and concise.
+
+For future tasks, read the project summary and coding rules, load only the relevant context, inspect the affected source files, and update documentation after verified changes.
+
+Do not store source code copies, conversation transcripts, API keys, or unnecessary repeated explanations in these files.
+
+## 14. Implementation order
+
+Work in the following order:
+
+1. Research official documentation.
+2. Inspect the existing project and database.
+3. Document the existing architecture.
+4. Propose the embedding model and vector storage design.
+5. Design the normalized product search document.
+6. Implement product embedding storage and indexing.
+7. Implement reliable synchronization for product and related-entity changes.
+8. Implement semantic search with structured filters.
+9. Implement failure recovery and reindexing.
+10. Add tests and verify synchronization.
+11. Add independent brand/category indexing only if approved and justified.
+12. Update AI context documentation and report the results.
+
+### Expected final report
+
+Provide:
+
+- Research sources.
+- Existing architecture findings.
+- Final entity-indexing strategy.
+- Database schema and indexes.
+- Synchronization workflow.
+- APIs and example requests.
+- Files created or modified.
+- Tests actually executed.
+- Reindexing and recovery instructions.
+- Remaining issues.
+
+Begin with research and inspection. Do not implement until the existing schema and proposed indexing strategy are understood.
+
+
+
+2. 

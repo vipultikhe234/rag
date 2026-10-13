@@ -2,6 +2,19 @@
 
 Newest first. One entry per meaningful change; no conversation logs or source dumps.
 
+## 2026-10-13 — No Docker, AI connection errors, admin layout, UI check
+- Removed `docker-compose.yml` and the Testcontainers dependencies; default `DB_URL` uses port 5432;
+  `ProductRagIntegrationTest` is opt-in via `IT_DB_URL` (localhost `*_test` DB only) and raises the login rate
+  limit for its own run. README, `.env.example`, `.cursor/rules` and `ai/` updated.
+- Backend: connection refused / unknown host anywhere in the cause chain → `503 AI_PROVIDER_UNREACHABLE`
+  (transient, so vector sync retries) with a hint to start Ollama; frontend message added.
+- Frontend layout: full-height shell where only `<main>` scrolls (sidebar no longer moves with the page), scroll
+  resets on navigation, `scrollbar-none` utility hides scrollbars on main, sidebar nav and chat panes.
+- Frontend fix: product-list attribute filters list the category's own attributes first and no longer drop
+  them past 10; more than 10 active filters are refused with a toast (API limit).
+- Tests: `mvnw test` 203 run, 0 failures, 13 skipped; integration test 13/13 on `ragdb_it_test`; lint + build
+  pass; browser click-through of the catalog UI passed.
+
 ## 2026-10-13 — Catalog modules: tests, seed, admin UI, docs
 - Backend: catalog controllers accept `PATCH /{id}` as an alias of `PUT /{id}` (full body + `version`).
 - Tests: fixed existing product tests; added category, brand, attribute, validator, variant, catalog-links,

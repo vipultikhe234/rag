@@ -120,6 +120,7 @@ saved. Nothing is written while the model is generating.
 | Situation | Result |
 |-----------|--------|
 | No API key | `503 AI_PROVIDER_NOT_CONFIGURED` (structured-only questions still need the chat model, so they fail too) |
+| Provider not running / unknown host (e.g. Ollama stopped) | `503 AI_PROVIDER_UNREACHABLE` |
 | Timeout / 429 / 5xx | `503 AI_PROVIDER_UNAVAILABLE` |
 | Invalid key / model | `502 AI_PROVIDER_ERROR` |
 | No credits / quota (`429 insufficient_quota`) | `502 AI_PROVIDER_QUOTA_EXCEEDED` |

@@ -45,13 +45,16 @@ public class CategoryService {
     private final ProductRepository productRepository;
     private final ProductAttributeRepository attributeRepository;
     private final VectorSyncOutbox outbox;
+    private final CategoryAssignability assignability;
 
     public CategoryService(CategoryRepository categoryRepository, ProductRepository productRepository,
-                           ProductAttributeRepository attributeRepository, VectorSyncOutbox outbox) {
+                           ProductAttributeRepository attributeRepository, VectorSyncOutbox outbox,
+                           CategoryAssignability assignability) {
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
         this.attributeRepository = attributeRepository;
         this.outbox = outbox;
+        this.assignability = assignability;
     }
 
     @Transactional(readOnly = true)
@@ -81,7 +84,7 @@ public class CategoryService {
         return all.stream()
                 .filter(c -> includeInactive || c.isActive())
                 .map(c -> new CategoryOption(c.getId(), c.getName(), c.getSlug(), c.getParentId(), path(c, byId),
-                        c.getStatus()))
+                        c.getStatus(), CategoryAssignability.firstInactive(c, byId).isEmpty()))
                 .sorted((a, b) -> a.path().compareToIgnoreCase(b.path()))
                 .toList();
     }
@@ -155,7 +158,7 @@ public class CategoryService {
             throw new ConflictException("CATEGORY_HAS_SUBCATEGORIES",
                     "The category has subcategories. Move or delete them first, or deactivate the category.");
         }
-        if (attributeRepository.existsByCategoryId(id)) {
+        if (attributeRepository.existsAssignedToCategory(id)) {
             throw new ConflictException("CATEGORY_HAS_ATTRIBUTES",
                     "The category has attribute definitions. Deactivate the category instead of deleting it.");
         }
@@ -181,8 +184,11 @@ public class CategoryService {
             throw FieldValidationException.of("parentId",
                     "The selected parent is a subcategory of this category; that would create a cycle");
         }
-        if (!parent.isActive() && !parentId.equals(currentParentId)) {
-            throw FieldValidationException.of("parentId", "Inactive categories cannot be chosen as a parent");
+        if (!parentId.equals(currentParentId)) {
+            assignability.blocker(parent).ifPresent(blocker -> {
+                throw FieldValidationException.of("parentId",
+                        CategoryAssignability.message(parent, blocker, "chosen as a parent"));
+            });
         }
     }
 

@@ -76,7 +76,7 @@ public class AttributeValueValidator {
         return result;
     }
 
-    static Object coerce(ProductAttribute definition, Object value) {
+    public static Object coerce(ProductAttribute definition, Object value) {
         String name = definition.getName();
         return switch (definition.getDataType()) {
             case STRING -> {

@@ -39,6 +39,27 @@ pagination, sorting; admin UI (list, create, edit, details, confirm dialogs, loa
 - Deterministic, rerun-safe (no duplicates), parents first, verify target DB first, verify counts in code.
 - Never seed/reset a production or shared DB without approval.
 
+## Product management system (request of 2026-10-13, second round)
+Five admin modules under one "Product Management" nav group: Products (central), Categories, Brands,
+Attributes, Variants. Research: `ai/RESEARCH.md`. Decisions confirmed by the user:
+- Variant products: `products.price` / `stock_quantity` become a read-only summary recalculated by the backend
+  in the same transaction (lowest active variant price, total active variant stock); simple products edit them.
+- Variants use `price` + optional `compareAtPrice` (> price); `salePrice` is migrated (price = old sale price,
+  compareAtPrice = old price).
+- Attributes are global definitions assigned to one or more categories (many-to-many, inherited by
+  subcategories); slug and name globally unique.
+- Product options (max 3) with values; a variant is one combination (unique per product). Existing variants
+  are backfilled from their attribute JSON.
+- Images are http(s) URLs (no upload service); a variant may pick one of its product's images.
+- Migration and seed may be applied to `RagDB` after verification on a scratch DB.
+
+Further rules: product slug (unique), category + optional subcategory selection, inactive parent category
+blocks new assignments through its descendants, product create with options and initial variants in one
+transaction, Product Details page (Overview, Specifications, Images, Variants, Inventory), product filters
+(price range, stock availability, has variants), variant filters (category, brand, option values), barcode
+and image per variant, max 100 variants per product. No SEO fields (no storefront); no multi-warehouse
+inventory; no orders module exists.
+
 ### Other
 - Tests for each module's rules plus seed verification; run the existing suite.
 - Swagger/OpenAPI only if it can be added without disruption.

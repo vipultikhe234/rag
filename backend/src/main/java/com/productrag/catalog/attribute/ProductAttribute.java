@@ -1,27 +1,34 @@
 package com.productrag.catalog.attribute;
 
 import com.productrag.catalog.CatalogStatus;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 /**
- * Definition of a specification field for products in a category (and its subcategories). Product values are
- * stored in {@code products.attributes} keyed by this attribute's slug.
+ * Global definition of a specification field, assigned to one or more categories (and inherited by their
+ * subcategories). Product values are stored in {@code products.attributes} keyed by this attribute's slug.
  */
 @Entity
 @Table(name = "product_attributes")
@@ -31,8 +38,11 @@ public class ProductAttribute {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @ElementCollection
+    @CollectionTable(name = "product_attribute_categories", joinColumns = @JoinColumn(name = "attribute_id"))
     @Column(name = "category_id", nullable = false)
-    private UUID categoryId;
+    @BatchSize(size = 100)
+    private Set<UUID> categoryIds = new LinkedHashSet<>();
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -81,12 +91,13 @@ public class ProductAttribute {
         this.id = id;
     }
 
-    public UUID getCategoryId() {
-        return categoryId;
+    public Set<UUID> getCategoryIds() {
+        return categoryIds;
     }
 
-    public void setCategoryId(UUID categoryId) {
-        this.categoryId = categoryId;
+    public void setCategoryIds(Collection<UUID> categoryIds) {
+        this.categoryIds.clear();
+        this.categoryIds.addAll(categoryIds);
     }
 
     public String getName() {

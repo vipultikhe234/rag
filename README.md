@@ -513,8 +513,9 @@ npm run build          # includes the TypeScript type check
   .\mvnw.cmd test
   ```
 
-- Without `IT_DB_URL`: 202 backend tests run, 0 failures, 13 integration tests skipped. There are no frontend
-  unit tests; lint and the production build pass.
+- Without `IT_DB_URL`: 203 backend tests run, 0 failures, 13 integration tests skipped. With `IT_DB_URL` set to
+  `ragdb_it_test`, all 13 integration tests pass. There are no frontend unit tests; lint and the production
+  build pass.
 
 Coverage includes product CRUD, validation and duplicate SKUs, JWT and role-based access (401/403), outbox
 creation, skipping unchanged embeddings, retries/backoff/permanent failures, stale lease recovery, idempotent

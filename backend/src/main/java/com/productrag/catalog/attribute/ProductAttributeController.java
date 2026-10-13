@@ -52,10 +52,11 @@ public class ProductAttributeController {
             @RequestParam(required = false) AttributeDataType dataType,
             @RequestParam(required = false) CatalogStatus status,
             @RequestParam(required = false) Boolean filterable,
+            @RequestParam(required = false) Boolean required,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "name,asc") String sort) {
-        return attributeService.list(q, categoryId, dataType, status, filterable,
+        return attributeService.list(q, categoryId, dataType, status, filterable, required,
                 PageRequests.of(page, size, sort, SORTABLE));
     }
 

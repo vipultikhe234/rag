@@ -19,14 +19,21 @@ On Windows set `JAVA_HOME` (JDK 21) if missing.
 - Validation: `product/ProductRequestValidationTest` (plain `Validator`).
 - Fixtures: `catalog/CatalogFixturesTest` reads `scripts/catalog-fixtures.json` and checks it against the request
   DTOs, slug rules, hierarchy order and a real `AttributeValueValidator` (no DB).
-- Integration: `ProductRagIntegrationTest` (Testcontainers pgvector, `@Testcontainers(disabledWithoutDocker = true)`;
-  skipped on this machine because Docker is not installed). Resets catalog tables in its own container and
-  creates the `Electronics` category / `ExampleBrand` brand it uses. Fake AI: `support/FakeAiModels`.
+- Integration: `ProductRagIntegrationTest` — opt-in, runs only when `IT_DB_URL` points to a localhost database
+  whose name ends in `_test` (`@EnabledIfEnvironmentVariable`); credentials from `IT_DB_USERNAME`/`IT_DB_PASSWORD`.
+  No Docker. Resets catalog/product tables in that DB and creates the `Electronics` category / `ExampleBrand`
+  brand it uses. Login rate limit raised in its properties (every test signs in). Fake AI: `support/FakeAiModels`.
 - Shared config builder: `support/TestProperties.defaults()`.
 
 ## Test database
-- Tests never use `RagDB`. Integration tests use a throwaway Testcontainers DB; `APP_ENV_FILE` is redirected in
-  `pom.xml` so the real `.env` is not read. No paid AI calls (fakes only).
+- Tests never use `RagDB`. The integration test uses a dedicated local DB (`ragdb_it_test`, created for it; the
+  test wipes it on every run). `APP_ENV_FILE` is redirected in `pom.xml` so the real `.env` is not read.
+  No paid AI calls (fakes only).
+  ```powershell
+  $env:IT_DB_URL = 'jdbc:postgresql://localhost:5432/ragdb_it_test'
+  $env:IT_DB_USERNAME = '<user>'; $env:IT_DB_PASSWORD = '<password>'   # never commit these
+  cd backend; .\mvnw.cmd test -Dtest=ProductRagIntegrationTest
+  ```
 - Manual catalog verification: scratch DB `ragdb_catalog_check` on local PostgreSQL + backend jar on port 8081
   (`DB_URL`/`SERVER_PORT` env overrides). Still exists; drop only with the user's go-ahead.
 
@@ -37,8 +44,10 @@ On Windows set `JAVA_HOME` (JDK 21) if missing.
 ## Last executed results
 | Date | Command | Result |
 |------|---------|--------|
-| 2026-10-13 | `mvnw test` | 202 run, 0 failures, 0 errors, 13 skipped (no Docker) |
-| 2026-10-13 | `npm run lint`, `npm run build` | clean (Vite advisory: main chunk 502 kB) |
+| 2026-10-13 | `mvnw test` (no `IT_DB_URL`) | 203 run, 0 failures, 0 errors, 13 skipped (integration test) |
+| 2026-10-13 | `mvnw test -Dtest=ProductRagIntegrationTest` on `ragdb_it_test` | 13/13 passed |
+| 2026-10-13 | `npm run lint`, `npm run build` | clean (Vite advisory: main chunk 503 kB) |
+| 2026-10-13 | browser click-through on scratch backend (8081) + Vite (5174) | all catalog flows passed (see below) |
 | 2026-10-13 | seed-catalog on `ragdb_catalog_check`, run 1 / run 2 | 130 created / 130 reused, verification passed |
 | 2026-10-13 | live API checks on scratch backend (23 scenarios) | 23/23 passed |
 | 2026-10-13 | seed-catalog on `RagDB`, run 1 / run 2 | 129 created + 1 reused / 130 reused, verification passed |
@@ -48,7 +57,14 @@ search/paging/sort, inherited applicable attributes, in-use deletes (409), inact
 rejected, typed attribute errors, PATCH update with version, stale version 409, deactivate/reactivate,
 `salePrice >= price` rejected.
 
+Browser flows covered (throwaway admin on `ragdb_catalog_check`): category create (derived slug, required
+errors, duplicate 409 under Name), edit (dirty-gated save), in-use delete disabled, deactivate; SELECT attribute
+with options; product form with inherited typed spec fields, typed errors, create + embedding "Synced" via
+Ollama; inactive category shown as "(inactive)"; variant sale-price rule + "Low stock" badge; brand/variant/
+attribute list filters; product-list attribute filters (category's own first, max 10); mobile menu overlay;
+sidebar fixed while only `<main>` scrolls, scrollbars hidden; chat page fits the viewport.
+
 ## Not covered
-- Browser/UI behaviour of the new pages (no frontend unit tests; not clicked through).
-- `ProductRagIntegrationTest` with the catalog changes (needs Docker).
+- Asking a chat question in the browser (embedding path via Ollama was verified instead).
+- Frontend unit tests (none exist).
 - Order-history preservation (no orders module exists).

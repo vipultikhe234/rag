@@ -12,21 +12,26 @@ import org.springframework.data.repository.query.Param;
 public interface ProductAttributeRepository
         extends JpaRepository<ProductAttribute, UUID>, JpaSpecificationExecutor<ProductAttribute> {
 
-    boolean existsByCategoryIdAndNameIgnoreCase(UUID categoryId, String name);
+    boolean existsByNameIgnoreCase(String name);
 
-    boolean existsByCategoryIdAndNameIgnoreCaseAndIdNot(UUID categoryId, String name, UUID id);
+    boolean existsByNameIgnoreCaseAndIdNot(String name, UUID id);
 
-    boolean existsByCategoryIdAndSlug(UUID categoryId, String slug);
+    boolean existsBySlug(String slug);
 
-    boolean existsByCategoryIdAndSlugAndIdNot(UUID categoryId, String slug, UUID id);
+    boolean existsBySlugAndIdNot(String slug, UUID id);
 
-    boolean existsByCategoryId(UUID categoryId);
+    @Query("select count(a) > 0 from ProductAttribute a join a.categoryIds c where c = :categoryId")
+    boolean existsAssignedToCategory(@Param("categoryId") UUID categoryId);
 
-    List<ProductAttribute> findAllByCategoryIdIn(Collection<UUID> categoryIds);
+    /** Attributes assigned to at least one of the categories. */
+    @Query("select distinct a from ProductAttribute a join a.categoryIds c where c in :categoryIds")
+    List<ProductAttribute> findAllAssignedToAny(@Param("categoryIds") Collection<UUID> categoryIds);
 
-    List<ProductAttribute> findAllByCategoryIdInAndStatus(Collection<UUID> categoryIds, CatalogStatus status);
+    @Query("select distinct a from ProductAttribute a join a.categoryIds c where c in :categoryIds and a.status = :status")
+    List<ProductAttribute> findAllAssignedToAnyWithStatus(@Param("categoryIds") Collection<UUID> categoryIds,
+                                                          @Param("status") CatalogStatus status);
 
     /** Rows of [categoryId, attributeCount]. */
-    @Query("select a.categoryId, count(a) from ProductAttribute a where a.categoryId in :ids group by a.categoryId")
+    @Query("select c, count(a) from ProductAttribute a join a.categoryIds c where c in :ids group by c")
     List<Object[]> countByCategoryIds(@Param("ids") Collection<UUID> ids);
 }

@@ -26,6 +26,7 @@ const SORT_OPTIONS = [
   { value: 'price,desc', label: 'Price (high to low)' },
   { value: 'stockQuantity,asc', label: 'Stock (low to high)' },
 ]
+/** The API accepts at most this many `attr` parameters per request. */
 const MAX_ATTRIBUTE_FILTERS = 10
 
 /** Parses repeated `attr=slug:value` URL parameters. */
@@ -163,20 +164,25 @@ export function ProductListPage() {
   const filterDefinitions = useLoader(
     async (signal) => ({
       categoryId,
+      // The category's own attributes first: they are the most specific filters.
       definitions: categoryId
-        ? (await attributeApi.applicable(categoryId, false, signal)).filter((d) => d.filterable)
+        ? (await attributeApi.applicable(categoryId, false, signal))
+            .filter((d) => d.filterable)
+            .sort((a, b) => Number(b.categoryId === categoryId) - Number(a.categoryId === categoryId))
         : [],
     }),
     categoryId,
   )
   const attributeFilterDefs =
-    filterDefinitions.data?.categoryId === categoryId
-      ? filterDefinitions.data.definitions.slice(0, MAX_ATTRIBUTE_FILTERS)
-      : []
+    filterDefinitions.data?.categoryId === categoryId ? filterDefinitions.data.definitions : []
   const attributeFilters = parseAttributeFilters(attrKey ? attrKey.split('\n') : [])
 
   const setAttributeFilter = (slug: string, value: string) => {
     const next = { ...attributeFilters, [slug]: value }
+    if (Object.values(next).filter((item) => item !== '').length > MAX_ATTRIBUTE_FILTERS) {
+      toast.error(`At most ${MAX_ATTRIBUTE_FILTERS} attribute filters can be combined. Clear one first.`)
+      return
+    }
     updateParams({
       attr: Object.entries(next)
         .filter(([, item]) => item !== '')

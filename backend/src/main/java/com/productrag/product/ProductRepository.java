@@ -1,11 +1,14 @@
 package com.productrag.product;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +17,33 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     boolean existsBySku(String sku);
 
     boolean existsBySkuAndIdNot(String sku, UUID id);
+
+    boolean existsBySlug(String slug);
+
+    boolean existsBySlugAndIdNot(String slug, UUID id);
+
+    /** Serializes variant writes per product (combination checks and the price/stock summary). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.id = :id")
+    Optional<Product> findByIdForUpdate(@Param("id") UUID id);
+
+    /**
+     * Variant products: price = lowest active variant price (all variants when none is active), stock = total stock
+     * of active variants. Bypasses the entity version on purpose: the summary is not an admin edit.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE products p
+            SET price = COALESCE(
+                    (SELECT min(v.price) FROM product_variants v WHERE v.product_id = p.id AND v.status = 'ACTIVE'),
+                    (SELECT min(v.price) FROM product_variants v WHERE v.product_id = p.id),
+                    p.price),
+                stock_quantity = LEAST(COALESCE(
+                    (SELECT sum(v.stock_quantity) FROM product_variants v
+                     WHERE v.product_id = p.id AND v.status = 'ACTIVE'), 0), 2147483647)
+            WHERE p.id = :id AND p.has_variants
+            """, nativeQuery = true)
+    int refreshVariantSummary(@Param("id") UUID id);
 
     Optional<Product> findBySkuAndStatus(String sku, ProductStatus status);
 

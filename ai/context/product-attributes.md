@@ -1,6 +1,6 @@
 # Product attributes
 
-**Status:** done — backend, UI, tests, seeded. UI not browser-tested. API details: `ai/API_CONTRACTS.md`.
+**Status:** done — backend, UI, tests, seeded. UI browser-verified on the scratch DB. API details: `ai/API_CONTRACTS.md`.
 
 ## Files
 - Backend `catalog/attribute/`: `ProductAttribute` (options as JSONB `List<String>`), `AttributeDataType`,
@@ -24,6 +24,8 @@
   kept, changing/adding it rejected (UI shows it read-only). Undefined keys allowed (free-form).
 - Errors: `VALIDATION_FAILED` with fields `attributes.<slug>` (UI maps them to the typed field).
 - Filterable attributes drive product list filters `attr=slug:value` (JSONB text equality, case-insensitive).
+  API accepts at most 10 `attr` params; `pages/ProductListPage.tsx` lists the selected category's own attributes
+  before inherited ones and refuses an 11th active filter with a toast.
 
 ## Seed data (30; * = inactive, R = required, F = filterable)
 - Electronics: RAM (NUMBER GB, F), Storage Capacity (NUMBER GB, F), Processor (SELECT, F), Screen Size (NUMBER

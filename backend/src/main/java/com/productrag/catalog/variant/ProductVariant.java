@@ -33,7 +33,7 @@ public class ProductVariant {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "product_id", nullable = false)
+    @JoinColumn(name = "product_id", nullable = false, updatable = false)
     private Product product;
 
     @Column(nullable = false, length = 64, unique = true)
@@ -49,8 +49,19 @@ public class ProductVariant {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "sale_price", precision = 12, scale = 2)
-    private BigDecimal salePrice;
+    /** Original price shown crossed out; higher than {@link #price} when set. */
+    @Column(name = "compare_at_price", precision = 12, scale = 2)
+    private BigDecimal compareAtPrice;
+
+    @Column(length = 64)
+    private String barcode;
+
+    @Column(name = "image_id")
+    private UUID imageId;
+
+    /** Sorted option value ids; unique per product, so no two variants share a combination. */
+    @Column(name = "option_signature", nullable = false, length = 200)
+    private String optionSignature;
 
     @Column(name = "stock_quantity", nullable = false)
     private int stockQuantity;
@@ -119,12 +130,36 @@ public class ProductVariant {
         this.price = price;
     }
 
-    public BigDecimal getSalePrice() {
-        return salePrice;
+    public BigDecimal getCompareAtPrice() {
+        return compareAtPrice;
     }
 
-    public void setSalePrice(BigDecimal salePrice) {
-        this.salePrice = salePrice;
+    public void setCompareAtPrice(BigDecimal compareAtPrice) {
+        this.compareAtPrice = compareAtPrice;
+    }
+
+    public String getBarcode() {
+        return barcode;
+    }
+
+    public void setBarcode(String barcode) {
+        this.barcode = barcode;
+    }
+
+    public UUID getImageId() {
+        return imageId;
+    }
+
+    public void setImageId(UUID imageId) {
+        this.imageId = imageId;
+    }
+
+    public String getOptionSignature() {
+        return optionSignature;
+    }
+
+    public void setOptionSignature(String optionSignature) {
+        this.optionSignature = optionSignature;
     }
 
     public int getStockQuantity() {

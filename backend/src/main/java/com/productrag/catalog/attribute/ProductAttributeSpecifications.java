@@ -22,8 +22,13 @@ final class ProductAttributeSpecifications {
                 cb.like(cb.lower(root.get("slug")), pattern, '\\'));
     }
 
-    static Specification<ProductAttribute> categoryEquals(UUID categoryId) {
-        return (root, query, cb) -> cb.equal(root.get("categoryId"), categoryId);
+    /** Directly assigned to the category (inherited assignments are not included). */
+    static Specification<ProductAttribute> assignedTo(UUID categoryId) {
+        return (root, query, cb) -> cb.isMember(categoryId, root.<java.util.Set<UUID>>get("categoryIds"));
+    }
+
+    static Specification<ProductAttribute> requiredEquals(boolean required) {
+        return (root, query, cb) -> cb.equal(root.get("required"), required);
     }
 
     static Specification<ProductAttribute> dataTypeEquals(AttributeDataType dataType) {

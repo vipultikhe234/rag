@@ -14,19 +14,22 @@ import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
-/** Create/update payload. {@code salePrice} is optional and must be lower than {@code price}. */
+/**
+ * Create/update payload for one variant. {@code options} maps each product option name to one of its values
+ * (e.g. {"Color": "Black", "Storage Capacity": "256"}); the variant title is generated from them.
+ * {@code compareAtPrice} is optional and must be higher than {@code price}. {@code imageId} must be one of the
+ * product's images. The product cannot be changed after creation.
+ */
 public record ProductVariantRequest(
         @NotNull(message = "Product is required")
         UUID productId,
 
         @NotBlank(message = "SKU is required")
-        @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
-                message = "SKU must be 1-64 characters: letters, digits, '.', '_' or '-', starting with a letter or digit")
+        @Pattern(regexp = VariantDraft.SKU_PATTERN, message = VariantDraft.SKU_MESSAGE)
         String sku,
 
-        @NotBlank(message = "Variant name is required")
-        @Size(max = 200, message = "Variant name must be at most 200 characters")
-        String variantName,
+        @Size(max = 3, message = "A variant has at most 3 options")
+        Map<String, String> options,
 
         @ValidAttributes
         Map<String, Object> attributes,
@@ -36,16 +39,27 @@ public record ProductVariantRequest(
         @Digits(integer = 10, fraction = 2, message = "Price must have at most 10 integer digits and 2 decimals")
         BigDecimal price,
 
-        @DecimalMin(value = "0.00", message = "Sale price must not be negative")
-        @Digits(integer = 10, fraction = 2, message = "Sale price must have at most 10 integer digits and 2 decimals")
-        BigDecimal salePrice,
+        @DecimalMin(value = "0.00", message = "Compare-at price must not be negative")
+        @Digits(integer = 10, fraction = 2,
+                message = "Compare-at price must have at most 10 integer digits and 2 decimals")
+        BigDecimal compareAtPrice,
 
         @NotNull(message = "Stock quantity is required")
         @Min(value = 0, message = "Stock quantity must not be negative")
         @Max(value = 1_000_000_000, message = "Stock quantity is too large")
         Integer stockQuantity,
 
+        @Pattern(regexp = VariantDraft.BARCODE_PATTERN, message = VariantDraft.BARCODE_MESSAGE)
+        String barcode,
+
+        UUID imageId,
+
         CatalogStatus status,
 
         Long version) {
+
+    public VariantDraft toDraft() {
+        return new VariantDraft(sku, options, attributes, price, compareAtPrice, stockQuantity, barcode, imageId, null,
+                status);
+    }
 }

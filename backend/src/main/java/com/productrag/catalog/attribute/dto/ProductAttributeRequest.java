@@ -11,11 +11,15 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Create/update payload. {@code options} is required (1-50 distinct values) for SELECT and must be empty for every
- * other type. A blank slug is derived from the name; product values are keyed by the slug.
+ * Create/update payload. {@code categoryIds} lists the categories the attribute is assigned to (it also applies to
+ * their subcategories); older clients may send a single {@code categoryId} instead. {@code options} is required
+ * (1-50 distinct values) for SELECT and must be empty for every other type. A blank slug is derived from the name;
+ * product values are keyed by the slug, which is unique across all attributes.
  */
 public record ProductAttributeRequest(
-        @NotNull(message = "Category is required")
+        @Size(max = 20, message = "An attribute can be assigned to at most 20 categories")
+        List<@NotNull(message = "Category ids must not be empty") UUID> categoryIds,
+
         UUID categoryId,
 
         @NotBlank(message = "Name is required")

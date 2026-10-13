@@ -3,6 +3,7 @@ package com.productrag.product;
 import com.productrag.catalog.brand.Brand;
 import com.productrag.catalog.brand.BrandRepository;
 import com.productrag.catalog.category.Category;
+import com.productrag.catalog.category.CategoryAssignability;
 import com.productrag.catalog.category.CategoryRepository;
 import com.productrag.common.exception.FieldValidationException;
 import com.productrag.product.dto.ProductRequest;
@@ -19,10 +20,13 @@ public class ProductCatalogLinks {
 
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
+    private final CategoryAssignability assignability;
 
-    public ProductCatalogLinks(CategoryRepository categoryRepository, BrandRepository brandRepository) {
+    public ProductCatalogLinks(CategoryRepository categoryRepository, BrandRepository brandRepository,
+                               CategoryAssignability assignability) {
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
+        this.assignability = assignability;
     }
 
     /** @param currentCategoryId the product's current category, or null for a new product */
@@ -39,9 +43,12 @@ public class ProductCatalogLinks {
         } else {
             throw FieldValidationException.of("categoryId", "Category is required");
         }
-        if (!category.isActive() && !Objects.equals(category.getId(), currentCategoryId)) {
-            throw FieldValidationException.of("categoryId",
-                    "Category '" + category.getName() + "' is inactive and cannot be assigned to products");
+        if (!Objects.equals(category.getId(), currentCategoryId)) {
+            Category resolved = category;
+            assignability.blocker(category).ifPresent(blocker -> {
+                throw FieldValidationException.of("categoryId",
+                        CategoryAssignability.message(resolved, blocker, "assigned to products"));
+            });
         }
         return category;
     }
