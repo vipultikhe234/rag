@@ -1,0 +1,222 @@
+[
+  {
+    "name": "Wireless Noise-Cancelling Headphones",
+    "sku": "WH-001",
+    "description": "Over-ear Bluetooth headphones with active noise cancellation, 30-hour battery life, USB-C fast charging and a foldable design for travel.",
+    "category": "Audio",
+    "brand": "SoundWave",
+    "price": 7999.00,
+    "currency": "INR",
+    "stockQuantity": 25,
+    "attributes": { "color": "black", "battery_life": "30 hours", "connectivity": ["Bluetooth 5.3", "3.5mm"], "noise_cancellation": true }
+  },
+  {
+    "name": "True Wireless Earbuds",
+    "sku": "EB-210",
+    "description": "Compact in-ear earbuds with sweat resistance for workouts, touch controls and a charging case providing 24 hours of total playback.",
+    "category": "Audio",
+    "brand": "SoundWave",
+    "price": 2499.00,
+    "currency": "INR",
+    "stockQuantity": 60,
+    "attributes": { "water_resistance": "IPX5", "battery_life": "24 hours with case", "color": "white" }
+  },
+  {
+    "name": "Portable Bluetooth Speaker",
+    "sku": "SPK-330",
+    "description": "Rugged waterproof speaker with deep bass, 12-hour battery and a carabiner strap. Suitable for outdoor trips and the beach.",
+    "category": "Audio",
+    "brand": "BoomBox",
+    "price": 3499.00,
+    "currency": "INR",
+    "stockQuantity": 8,
+    "attributes": { "water_resistance": "IP67", "battery_life": "12 hours", "weight_grams": 540 }
+  },
+  {
+    "name": "USB-C Braided Charging Cable (1 m)",
+    "sku": "CBL-USB-C-1M",
+    "description": "Durable nylon-braided USB-C to USB-C cable supporting 60 W fast charging and 480 Mbps data transfer.",
+    "category": "Accessories",
+    "brand": "LinkPro",
+    "price": 399.00,
+    "currency": "INR",
+    "stockQuantity": 250,
+    "attributes": { "length": "1 m", "max_power_watts": 60 }
+  },
+  {
+    "name": "Wireless Optical Mouse",
+    "sku": "MS-120",
+    "description": "Ergonomic wireless mouse with silent clicks, adjustable DPI up to 2400 and an 18-month battery life on a single AA battery.",
+    "category": "Computer Peripherals",
+    "brand": "ClickTech",
+    "price": 899.00,
+    "currency": "INR",
+    "stockQuantity": 0,
+    "attributes": { "dpi": "800-2400", "connectivity": "2.4 GHz USB receiver" }
+  },
+  {
+    "name": "Mechanical Keyboard",
+    "sku": "KB-870",
+    "description": "Tenkeyless mechanical keyboard with hot-swappable tactile switches, white backlight and a detachable USB-C cable.",
+    "category": "Computer Peripherals",
+    "brand": "ClickTech",
+    "price": 4599.00,
+    "currency": "INR",
+    "stockQuantity": 14,
+    "attributes": { "switch_type": "tactile", "layout": "tenkeyless", "backlight": "white" }
+  },
+  {
+    "name": "27-inch 4K Monitor",
+    "sku": "MON-27-4K",
+    "description": "27-inch IPS monitor with 4K UHD resolution, HDR10 support, USB-C power delivery and an adjustable stand for office and design work.",
+    "category": "Displays",
+    "brand": "ViewMax",
+    "price": 28999.00,
+    "currency": "INR",
+    "stockQuantity": 5,
+    "attributes": { "resolution": "3840x2160", "panel": "IPS", "refresh_rate_hz": 60 }
+  },
+  {
+    "name": "LED Desk Lamp",
+    "sku": "LMP-200",
+    "description": "Dimmable LED desk lamp with five color temperatures, a USB charging port and a flexible arm for reading and home office use.",
+    "category": "Home Office",
+    "brand": "BrightNest",
+    "price": 1299.00,
+    "currency": "INR",
+    "stockQuantity": 40,
+    "attributes": { "color_temperatures": 5, "power_watts": 10 }
+  },
+  {
+    "name": "Ergonomic Office Chair",
+    "sku": "CHR-ERGO-1",
+    "description": "Breathable mesh office chair with adjustable lumbar support, 3D armrests and a recline lock, designed for long working hours.",
+    "category": "Home Office",
+    "brand": "SitWell",
+    "price": 12499.00,
+    "currency": "INR",
+    "stockQuantity": 9,
+    "attributes": { "max_load_kg": 120, "material": "mesh", "warranty": "3 years" }
+  },
+  {
+    "name": "Insulated Steel Water Bottle (750 ml)",
+    "sku": "BTL-750",
+    "description": "Double-wall vacuum insulated stainless steel bottle that keeps drinks cold for 24 hours or hot for 12 hours. Leak-proof lid for travel and gym.",
+    "category": "Travel",
+    "brand": "TrailMate",
+    "price": 799.00,
+    "currency": "INR",
+    "stockQuantity": 120,
+    "attributes": { "capacity": "750 ml", "material": "stainless steel", "colors": ["blue", "black", "green"] }
+  },
+  {
+    "name": "Cabin Trolley Bag",
+    "sku": "BAG-CABIN-55",
+    "description": "Lightweight 55 cm hard-shell cabin luggage with four spinner wheels, TSA lock and an expandable compartment.",
+    "category": "Travel",
+    "brand": "TrailMate",
+    "price": 5999.00,
+    "currency": "INR",
+    "stockQuantity": 18,
+    "attributes": { "size": "55 cm", "wheels": 4, "tsa_lock": true }
+  },
+  {
+    "name": "Power Bank 20000 mAh",
+    "sku": "PB-20K",
+    "description": "High-capacity power bank with 22.5 W fast charging, two USB-A ports and one USB-C port; charges a phone up to four times. Ideal for travel.",
+    "category": "Accessories",
+    "brand": "LinkPro",
+    "price": 1799.00,
+    "currency": "INR",
+    "stockQuantity": 3,
+    "attributes": { "capacity_mah": 20000, "output_watts": 22.5 }
+  },
+  {
+    "name": "Smart Fitness Watch",
+    "sku": "SW-450",
+    "description": "Fitness smartwatch with heart-rate and SpO2 tracking, built-in GPS, 100+ workout modes and up to 10 days of battery life. Water resistant for swimming.",
+    "category": "Wearables",
+    "brand": "FitPulse",
+    "price": 6499.00,
+    "currency": "INR",
+    "stockQuantity": 32,
+    "attributes": { "display": "1.4 inch AMOLED", "gps": true, "water_resistance": "5 ATM", "battery_life": "10 days" }
+  },
+  {
+    "name": "Full HD Webcam with Microphone",
+    "sku": "CAM-1080",
+    "description": "1080p 30 fps USB webcam with dual noise-reducing microphones, auto light correction and a privacy shutter for video calls and online classes.",
+    "category": "Computer Peripherals",
+    "brand": "ViewMax",
+    "price": 2199.00,
+    "currency": "INR",
+    "stockQuantity": 22,
+    "attributes": { "resolution": "1920x1080", "fps": 30, "privacy_shutter": true }
+  },
+  {
+    "name": "Laptop Backpack (15.6 inch)",
+    "sku": "BAG-LAP-156",
+    "description": "Water-repellent laptop backpack with a padded 15.6-inch compartment, anti-theft back pocket and USB charging port. Good for office commute and travel.",
+    "category": "Travel",
+    "brand": "TrailMate",
+    "price": 1899.00,
+    "currency": "INR",
+    "stockQuantity": 45,
+    "attributes": { "capacity_litres": 28, "laptop_size": "15.6 inch", "color": "grey" }
+  },
+  {
+    "name": "Portable SSD 1 TB",
+    "sku": "SSD-1TB",
+    "description": "Pocket-sized external NVMe SSD with read speeds up to 1050 MB/s over USB-C 3.2 Gen 2. Shock resistant aluminium body.",
+    "category": "Storage",
+    "brand": "DataVault",
+    "price": 7499.00,
+    "currency": "INR",
+    "stockQuantity": 12,
+    "attributes": { "capacity": "1 TB", "interface": "USB-C 3.2 Gen 2", "read_speed_mbps": 1050 }
+  },
+  {
+    "name": "Wi-Fi 6 Dual-Band Router",
+    "sku": "RTR-AX3000",
+    "description": "AX3000 dual-band Wi-Fi 6 router with four antennas, gigabit ports and parental controls. Covers a three-bedroom home.",
+    "category": "Networking",
+    "brand": "NetSpeed",
+    "price": 4299.00,
+    "currency": "INR",
+    "stockQuantity": 7,
+    "attributes": { "standard": "Wi-Fi 6", "speed": "AX3000", "lan_ports": 4, "antennas": 4 }
+  },
+  {
+    "name": "Adjustable Laptop Stand",
+    "sku": "STD-LAP-ALU",
+    "description": "Aluminium laptop stand with six height levels for 10 to 17 inch laptops. Improves posture and airflow; folds flat for travel.",
+    "category": "Home Office",
+    "brand": "BrightNest",
+    "price": 1499.00,
+    "currency": "INR",
+    "stockQuantity": 0,
+    "attributes": { "material": "aluminium", "height_levels": 6, "supported_sizes": "10-17 inch" }
+  },
+  {
+    "name": "65W GaN Fast Charger",
+    "sku": "CHG-GAN-65",
+    "description": "Compact 65 W GaN wall charger with two USB-C ports and one USB-A port. Charges a laptop, phone and earbuds at the same time.",
+    "category": "Accessories",
+    "brand": "LinkPro",
+    "price": 2299.00,
+    "currency": "INR",
+    "stockQuantity": 75,
+    "attributes": { "max_power_watts": 65, "ports": ["USB-C", "USB-C", "USB-A"] }
+  },
+  {
+    "name": "Soundbar with Wireless Subwoofer",
+    "sku": "SB-2100",
+    "description": "2.1 channel 160 W soundbar with a wireless subwoofer, Dolby Audio, HDMI ARC and Bluetooth for TV and movie nights.",
+    "category": "Audio",
+    "brand": "BoomBox",
+    "price": 11999.00,
+    "currency": "INR",
+    "stockQuantity": 4,
+    "attributes": { "channels": "2.1", "output_watts": 160, "connectivity": ["HDMI ARC", "Bluetooth", "Optical"] }
+  }
+]

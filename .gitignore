@@ -1,0 +1,22 @@
+# Secrets / local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Backend
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+*.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db

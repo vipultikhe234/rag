@@ -1,0 +1,25 @@
+name: product-rag
+
+services:
+  postgres:
+    # Official pgvector image: PostgreSQL 17 with the `vector` extension preinstalled.
+    image: pgvector/pgvector:pg17
+    container_name: product-rag-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-product_rag}
+      POSTGRES_USER: ${DB_USERNAME:-product_rag}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      # Host port defaults to 5433 to avoid clashing with a locally installed PostgreSQL on 5432.
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - product-rag-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  product-rag-pgdata:
