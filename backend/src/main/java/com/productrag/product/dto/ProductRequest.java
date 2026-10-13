@@ -12,10 +12,15 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Create/update payload. {@code status} is optional (defaults to ACTIVE on create, unchanged on update);
  * {@code version} enables optimistic concurrency checks on update.
+ * <p>
+ * The category is identified by {@code categoryId}, or (for older clients) by an existing category {@code category}
+ * name; one of the two is required. The brand works the same way with {@code brandId} / {@code brand} and is
+ * optional.
  */
 public record ProductRequest(
         @NotBlank(message = "Name is required")
@@ -31,7 +36,6 @@ public record ProductRequest(
         @Size(max = 5000, message = "Description must be at most 5000 characters")
         String description,
 
-        @NotBlank(message = "Category is required")
         @Size(max = 100, message = "Category must be at most 100 characters")
         String category,
 
@@ -56,5 +60,9 @@ public record ProductRequest(
 
         ProductStatus status,
 
-        Long version) {
+        Long version,
+
+        UUID categoryId,
+
+        UUID brandId) {
 }

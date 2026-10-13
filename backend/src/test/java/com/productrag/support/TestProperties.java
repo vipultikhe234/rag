@@ -26,7 +26,7 @@ public final class TestProperties {
                 new AppProperties.Cors(List.of("http://localhost:5173")),
                 new AppProperties.Http(DataSize.ofKilobytes(256)),
                 new AppProperties.RateLimit(10, 20),
-                new AppProperties.Products("INR"),
+                new AppProperties.Products("INR", 5),
                 new AppProperties.Ai("test-key", EMBEDDING_MODEL, DIMENSIONS, "test-chat-model", 0.2,
                         Duration.ofSeconds(5), Duration.ofSeconds(30)),
                 new AppProperties.Rag(5, 0.25, relativeScoreMargin, 20, 6, 1000, 1200,

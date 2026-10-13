@@ -39,8 +39,14 @@ public class Product {
     @Column(nullable = false, length = 100)
     private String category;
 
+    @Column(name = "category_id")
+    private UUID categoryId;
+
     @Column(length = 100)
     private String brand;
+
+    @Column(name = "brand_id")
+    private UUID brandId;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
@@ -117,6 +123,22 @@ public class Product {
 
     public void setBrand(String brand) {
         this.brand = brand;
+    }
+
+    public UUID getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(UUID categoryId) {
+        this.categoryId = categoryId;
+    }
+
+    public UUID getBrandId() {
+        return brandId;
+    }
+
+    public void setBrandId(UUID brandId) {
+        this.brandId = brandId;
     }
 
     public BigDecimal getPrice() {

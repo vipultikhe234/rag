@@ -1,5 +1,10 @@
 package com.productrag.product;
 
+import com.productrag.catalog.attribute.AttributeValueValidator;
+import com.productrag.catalog.brand.Brand;
+import com.productrag.catalog.category.Category;
+import com.productrag.catalog.category.CategoryRepository;
+import com.productrag.catalog.variant.ProductVariantRepository;
 import com.productrag.common.api.PageResponse;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.NotFoundException;
@@ -33,20 +38,30 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final VectorSyncOutbox outbox;
     private final ProductSyncStatusService syncStatusService;
+    private final ProductCatalogLinks catalogLinks;
+    private final AttributeValueValidator attributeValueValidator;
+    private final CategoryRepository categoryRepository;
+    private final ProductVariantRepository variantRepository;
     private final String defaultCurrency;
 
     public ProductService(ProductRepository productRepository, VectorSyncOutbox outbox,
-                          ProductSyncStatusService syncStatusService, AppProperties properties) {
+                          ProductSyncStatusService syncStatusService, ProductCatalogLinks catalogLinks,
+                          AttributeValueValidator attributeValueValidator, CategoryRepository categoryRepository,
+                          ProductVariantRepository variantRepository, AppProperties properties) {
         this.productRepository = productRepository;
         this.outbox = outbox;
         this.syncStatusService = syncStatusService;
+        this.catalogLinks = catalogLinks;
+        this.attributeValueValidator = attributeValueValidator;
+        this.categoryRepository = categoryRepository;
+        this.variantRepository = variantRepository;
         this.defaultCurrency = properties.products().defaultCurrency();
     }
 
     @Transactional
     public ProductResponse create(ProductRequest request) {
         String sku = normalizeSku(request.sku());
-        if (productRepository.existsBySku(sku)) {
+        if (productRepository.existsBySku(sku) || variantRepository.existsBySku(sku)) {
             throw skuConflict(sku);
         }
         Product product = new Product();
@@ -58,17 +73,26 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ProductResponse> list(String search, String category, ProductStatus status,
-                                              Pageable pageable) {
+    public PageResponse<ProductResponse> list(ProductListQuery query, Pageable pageable) {
         Specification<Product> spec = ProductSpecifications.all();
-        if (search != null && !search.isBlank()) {
-            spec = spec.and(ProductSpecifications.textSearch(search));
+        if (query.search() != null && !query.search().isBlank()) {
+            spec = spec.and(ProductSpecifications.textSearch(query.search()));
         }
-        if (category != null && !category.isBlank()) {
-            spec = spec.and(ProductSpecifications.categoryEquals(category));
+        if (query.category() != null && !query.category().isBlank()) {
+            spec = spec.and(ProductSpecifications.categoryEquals(query.category()));
         }
-        if (status != null) {
-            spec = spec.and(ProductSpecifications.statusEquals(status));
+        if (query.categoryId() != null) {
+            spec = spec.and(ProductSpecifications.categoryIdIn(
+                    categoryRepository.findSelfAndDescendantIds(query.categoryId())));
+        }
+        if (query.brandId() != null) {
+            spec = spec.and(ProductSpecifications.brandIdEquals(query.brandId()));
+        }
+        if (query.status() != null) {
+            spec = spec.and(ProductSpecifications.statusEquals(query.status()));
+        }
+        for (Map.Entry<String, String> filter : query.attributes().entrySet()) {
+            spec = spec.and(ProductSpecifications.attributeEquals(filter.getKey(), filter.getValue()));
         }
         Page<Product> page = productRepository.findAll(spec, pageable);
         List<UUID> ids = page.getContent().stream().map(Product::getId).toList();
@@ -97,7 +121,8 @@ public class ProductService {
                     "The product was modified by someone else. Reload it and apply your changes again.");
         }
         String sku = normalizeSku(request.sku());
-        if (!sku.equals(product.getSku()) && productRepository.existsBySkuAndIdNot(sku, id)) {
+        if (!sku.equals(product.getSku())
+                && (productRepository.existsBySkuAndIdNot(sku, id) || variantRepository.existsBySku(sku))) {
             throw skuConflict(sku);
         }
         ProductStatus previousStatus = product.getStatus();
@@ -128,6 +153,10 @@ public class ProductService {
     @Transactional
     public void delete(UUID id) {
         Product product = find(id);
+        if (variantRepository.existsByProductId(id)) {
+            throw new ConflictException("PRODUCT_HAS_VARIANTS",
+                    "The product has variants. Deactivate the product instead of deleting it.");
+        }
         // The outbox event keeps id/SKU/name so the worker can verify vector cleanup after the row is gone.
         // product_embeddings rows are removed by ON DELETE CASCADE in this same transaction.
         outbox.enqueue(product, VectorSyncEventType.PRODUCT_DELETED);
@@ -141,16 +170,22 @@ public class ProductService {
     }
 
     private void apply(Product product, ProductRequest request, String sku) {
+        Category category = catalogLinks.category(request, product.getCategoryId());
+        Brand brand = catalogLinks.brand(request, product.getBrandId());
+        Map<String, Object> attributes = attributeValueValidator.validate(category.getId(),
+                cleanAttributes(request.attributes()), Objects.requireNonNullElse(product.getAttributes(), Map.of()));
         product.setName(request.name().trim());
         product.setSku(sku);
         product.setDescription(request.description().trim());
-        product.setCategory(request.category().trim());
-        product.setBrand(request.brand() == null || request.brand().isBlank() ? null : request.brand().trim());
+        product.setCategoryId(category.getId());
+        product.setCategory(category.getName());
+        product.setBrandId(brand == null ? null : brand.getId());
+        product.setBrand(brand == null ? null : brand.getName());
         product.setPrice(request.price().setScale(2, RoundingMode.UNNECESSARY));
         product.setCurrency(request.currency() == null || request.currency().isBlank()
                 ? defaultCurrency : request.currency().trim().toUpperCase(Locale.ROOT));
         product.setStockQuantity(request.stockQuantity());
-        product.setAttributes(cleanAttributes(request.attributes()));
+        product.setAttributes(attributes);
     }
 
     private static Map<String, Object> cleanAttributes(Map<String, Object> attributes) {

@@ -1,0 +1,25 @@
+---
+description: Token-saving workflow using the ai/ context folder
+alwaysApply: true
+---
+
+# Project context workflow
+
+Concise project knowledge lives in `ai/`. Use it instead of re-scanning the repository.
+
+For every requirement or code change:
+1. Read `ai/PROJECT.md`, `ai/CODING_RULES.md` and `ai/TASKS.md` first.
+2. Read only the relevant `ai/context/<module>.md` and the source files it lists.
+   Use `ai/DATABASE.md`, `ai/API_CONTRACTS.md`, `ai/TESTING.md`, `ai/ARCHITECTURE.md` only when the task touches them.
+3. Open other files only to understand real dependencies; no full-repo scans unless the task needs it.
+4. Do not rewrite completed modules unnecessarily.
+5. After a change: update the module context file, `ai/TASKS.md` (`[x]` only when verified) and `ai/CHANGELOG.md`;
+   update `ai/DATABASE.md` / `ai/API_CONTRACTS.md` if schema or API changed.
+6. If docs and code disagree, trust the verified code and fix the docs.
+7. Never put secrets, tokens or passwords in `ai/` files; reference files by path instead of pasting code.
+
+Reply format after a task (short):
+- **Completed:** what was implemented
+- **Files:** key files created/modified
+- **Tests:** commands actually run and results
+- **Pending:** remaining issues / next step

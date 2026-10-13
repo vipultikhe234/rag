@@ -44,7 +44,9 @@ public record AppProperties(
     public record RateLimit(@Min(1) int loginPerMinute, @Min(1) int chatPerMinute) {
     }
 
-    public record Products(@NotBlank @Pattern(regexp = "^[A-Z]{3}$") String defaultCurrency) {
+    /** @param lowStockThreshold variants with 1..threshold units in stock are reported as LOW_STOCK */
+    public record Products(@NotBlank @Pattern(regexp = "^[A-Z]{3}$") String defaultCurrency,
+                           @Min(1) @Max(100_000) int lowStockThreshold) {
     }
 
     public record Ai(

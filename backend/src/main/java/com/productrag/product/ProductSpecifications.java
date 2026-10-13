@@ -1,7 +1,9 @@
 package com.productrag.product;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.Locale;
+import java.util.UUID;
 import org.springframework.data.jpa.domain.Specification;
 
 /** Type-safe, parameterized query building blocks for products. */
@@ -27,6 +29,22 @@ public final class ProductSpecifications {
     public static Specification<Product> categoryEquals(String category) {
         String value = category.trim().toLowerCase(Locale.ROOT);
         return (root, query, cb) -> cb.equal(cb.lower(root.get("category")), value);
+    }
+
+    public static Specification<Product> categoryIdIn(Collection<UUID> categoryIds) {
+        return (root, query, cb) -> root.get("categoryId").in(categoryIds);
+    }
+
+    public static Specification<Product> brandIdEquals(UUID brandId) {
+        return (root, query, cb) -> cb.equal(root.get("brandId"), brandId);
+    }
+
+    /** Case-insensitive equality on one attribute value (booleans and numbers compare by their JSON text). */
+    public static Specification<Product> attributeEquals(String key, String value) {
+        String expected = value.trim().toLowerCase(Locale.ROOT);
+        return (root, query, cb) -> cb.equal(
+                cb.lower(cb.function("jsonb_extract_path_text", String.class, root.get("attributes"), cb.literal(key))),
+                expected);
     }
 
     public static Specification<Product> statusEquals(ProductStatus status) {
@@ -73,7 +91,7 @@ public final class ProductSpecifications {
         return (root, query, cb) -> cb.equal(root.get("stockQuantity"), value);
     }
 
-    static String escapeLike(String value) {
+    public static String escapeLike(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

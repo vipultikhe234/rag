@@ -1,13 +1,16 @@
 package com.productrag.product;
 
+import com.productrag.catalog.Slugs;
 import com.productrag.common.api.PageRequests;
 import com.productrag.common.api.PageResponse;
+import com.productrag.common.exception.BadRequestException;
 import com.productrag.product.dto.ProductRequest;
 import com.productrag.product.dto.ProductResponse;
 import com.productrag.product.dto.ProductStatusRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -60,11 +63,37 @@ public class ProductController {
     public PageResponse<ProductResponse> list(
             @RequestParam(required = false) @Size(max = 100, message = "Search text must be at most 100 characters") String q,
             @RequestParam(required = false) @Size(max = 100) String category,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) UUID brandId,
             @RequestParam(required = false) ProductStatus status,
+            @RequestParam(required = false) @Size(max = 10, message = "At most 10 attribute filters are allowed")
+            List<String> attr,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort) {
-        return productService.list(q, category, status, pageRequest(page, size, sort));
+        ProductListQuery query = new ProductListQuery(q, category, categoryId, brandId, status,
+                attributeFilters(attr));
+        return productService.list(query, pageRequest(page, size, sort));
+    }
+
+    /** Parses repeated {@code attr=slug:value} parameters. */
+    static Map<String, String> attributeFilters(List<String> params) {
+        if (params == null || params.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> filters = new LinkedHashMap<>();
+        for (String param : params) {
+            int colon = param.indexOf(':');
+            String key = colon > 0 ? param.substring(0, colon).trim() : "";
+            String value = colon > 0 ? param.substring(colon + 1).trim() : "";
+            if (!key.matches(Slugs.PATTERN) || key.length() > 64 || value.isEmpty() || value.length() > 200) {
+                throw new BadRequestException("INVALID_PARAMETER",
+                        "Attribute filters must look like attr=slug:value (slug of at most 64 characters, value of "
+                                + "1-200 characters)");
+            }
+            filters.put(key, value);
+        }
+        return filters;
     }
 
     @GetMapping("/categories")

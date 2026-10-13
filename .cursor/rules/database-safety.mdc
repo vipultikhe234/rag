@@ -1,0 +1,18 @@
+---
+description: Safety rules for migrations, seed scripts and any database command
+globs: backend/src/main/resources/db/**,scripts/**,**/*.sql
+alwaysApply: false
+---
+
+# Database safety
+
+Schema reference: `ai/DATABASE.md`.
+
+- Schema changes only via a new Flyway file `V{n+1}__name.sql`; never edit an applied migration.
+- Never drop, truncate, reset or bulk-delete in `RagDB` (dev DB with real data) without explicit user approval.
+- Do not run migrations or seeds against a shared or production DB automatically; verify the target DB first
+  (seed scripts must refuse non-localhost targets).
+- Seeds must be deterministic and idempotent (match existing rows by slug/SKU, never duplicate).
+- Prefer a scratch DB (e.g. `ragdb_catalog_check`) or Testcontainers for verification.
+- Never print or store `DB_PASSWORD` or other `.env` values in output, docs or code.
+- Update `ai/DATABASE.md` after any schema or seed change.

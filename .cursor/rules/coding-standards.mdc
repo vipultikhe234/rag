@@ -1,0 +1,18 @@
+---
+description: Backend and frontend coding conventions for this project
+globs: backend/src/**/*.java,frontend/src/**/*.ts,frontend/src/**/*.tsx
+alwaysApply: false
+---
+
+# Coding standards
+
+Full list: `ai/CODING_RULES.md`. Essentials:
+
+- Backend: feature package `controller -> service -> repository`; record DTOs with Bean Validation; thin
+  controllers; errors via `BadRequestException` / `ConflictException` / `NotFoundException` /
+  `FieldValidationException`; lists via `Specification` + `PageRequests.of(..., SORTABLE)`.
+- Batch related counts (no N+1); `@Transactional` writes with `version` checks; product writes enqueue
+  `VectorSyncOutbox` events in the same transaction.
+- Frontend: API via `src/api/endpoints.ts`; types in `src/api/types.ts`; react-hook-form + zod; reuse
+  `src/components/ui/*`; filters in URL params; setState only in promise callbacks inside effects.
+- Never modify unrelated modules; never put secrets in code.

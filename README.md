@@ -18,7 +18,8 @@ A full-stack admin panel for managing a product catalog and chatting with it in 
 | Tests    | JUnit 5, Mockito, Spring MockMvc, Testcontainers (pgvector) |
 
 More documentation: [Architecture](docs/architecture.md) · [API examples](docs/api-examples.md) ·
-[RAG flow](docs/rag-flow.md) · [Vector sync](docs/vector-sync.md)
+[RAG flow](docs/rag-flow.md) · [Vector sync](docs/vector-sync.md) ·
+[AI-assistant context and task status](ai/PROJECT.md)
 
 ---
 

@@ -1,0 +1,16 @@
+---
+description: How to write and run tests and report results honestly
+globs: backend/src/test/**,frontend/src/**/*.test.*
+alwaysApply: false
+---
+
+# Testing
+
+Details and current status: `ai/TESTING.md`.
+
+- Backend: `cd backend; .\mvnw.cmd test`. Frontend: `cd frontend; npm run lint; npm run build`.
+- Unit tests use Mockito; web/security tests use `@WebMvcTest` importing `SecurityConfig`, `JwtService`,
+  `RestSecurityHandlers`, `ApiErrorWriter` with `TestProperties.JWT_SECRET`.
+- Integration tests use Testcontainers (`disabledWithoutDocker = true`); never the dev DB `RagDB`.
+- No paid AI calls; use `support/FakeAiModels`, `HashingEmbedder`, `InMemoryEmbeddingStore`.
+- Report only tests actually executed, with counts; record results and known failures in `ai/TESTING.md`.

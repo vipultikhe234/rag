@@ -14,7 +14,9 @@ public record ProductResponse(
         String sku,
         String description,
         String category,
+        UUID categoryId,
         String brand,
+        UUID brandId,
         BigDecimal price,
         String currency,
         int stockQuantity,
@@ -27,8 +29,8 @@ public record ProductResponse(
 
     public static ProductResponse from(Product product, ProductSyncInfo syncInfo) {
         return new ProductResponse(product.getId(), product.getName(), product.getSku(), product.getDescription(),
-                product.getCategory(), product.getBrand(), product.getPrice(), product.getCurrency(),
-                product.getStockQuantity(), product.getAttributes(), product.getStatus(), product.getVersion(),
-                product.getCreatedAt(), product.getUpdatedAt(), syncInfo);
+                product.getCategory(), product.getCategoryId(), product.getBrand(), product.getBrandId(),
+                product.getPrice(), product.getCurrency(), product.getStockQuantity(), product.getAttributes(),
+                product.getStatus(), product.getVersion(), product.getCreatedAt(), product.getUpdatedAt(), syncInfo);
     }
 }

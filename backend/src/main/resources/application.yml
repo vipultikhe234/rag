@@ -106,6 +106,7 @@ app:
     chat-per-minute: ${RATE_LIMIT_CHAT_PER_MINUTE:20}
   products:
     default-currency: ${DEFAULT_CURRENCY:INR}
+    low-stock-threshold: ${LOW_STOCK_THRESHOLD:5}
   ai:
     api-key: ${spring.ai.openai.api-key}
     embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
