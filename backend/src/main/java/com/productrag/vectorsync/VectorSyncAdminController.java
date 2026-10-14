@@ -58,7 +58,17 @@ public class VectorSyncAdminController {
 
     @PostMapping("/resync-missing")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public Map<String, Integer> resyncMissing() {
-        return Map.of("enqueued", adminService.resyncMissing());
+    public VectorSyncAdminService.MissingResult resyncMissing() {
+        return adminService.resyncMissing();
+    }
+
+    /**
+     * Re-syncs ACTIVE products, brands, categories, attributes and variants whose embedding is missing, from another
+     * model, or built from outdated text.
+     */
+    @PostMapping("/refresh-stale")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public VectorSyncAdminService.RefreshResult refreshStale() {
+        return adminService.refreshStale();
     }
 }

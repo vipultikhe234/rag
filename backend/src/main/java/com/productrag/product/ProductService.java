@@ -164,6 +164,18 @@ public class ProductService {
         return detailed(List.of(product), syncStatusService.statusFor(List.of(id))).get(0);
     }
 
+    /** Detailed responses in the order of {@code ids}; ids of products that no longer exist are skipped. */
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getAll(List<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Product> byId = new HashMap<>();
+        productRepository.findAllById(ids).forEach(p -> byId.put(p.getId(), p));
+        List<Product> ordered = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+        return detailed(ordered, syncStatusService.statusFor(ids));
+    }
+
     @Transactional(readOnly = true)
     public List<String> categories() {
         return productRepository.findDistinctCategories();
@@ -189,6 +201,8 @@ public class ProductService {
         }
         validateShape(request, hasVariants, existingVariants);
         ProductStatus previousStatus = product.getStatus();
+        UUID previousBrandId = product.getBrandId();
+        UUID previousCategoryId = product.getCategoryId();
         apply(product, request, sku, hasVariants);
         product.setSlug(resolveSlug(request.slug(), request.name(), id, product.getSlug()));
         if (request.status() != null) {
@@ -208,6 +222,12 @@ public class ProductService {
         outbox.enqueue(saved, VectorSyncEventType.PRODUCT_UPDATED);
         if (saved.getStatus() != previousStatus) {
             outbox.enqueue(saved, statusEventType(saved.getStatus()));
+        }
+        boolean brandChanged = !Objects.equals(previousBrandId, saved.getBrandId());
+        boolean categoryChanged = !Objects.equals(previousCategoryId, saved.getCategoryId());
+        if (brandChanged || categoryChanged) {
+            outbox.enqueuePreviousSummaries(brandChanged ? previousBrandId : null,
+                    categoryChanged ? previousCategoryId : null);
         }
         return detailed(List.of(saved), Map.of(id, pendingSync())).get(0);
     }

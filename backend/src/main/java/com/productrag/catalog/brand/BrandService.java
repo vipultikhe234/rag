@@ -13,12 +13,15 @@ import com.productrag.common.api.PageResponse;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.FieldValidationException;
 import com.productrag.common.exception.NotFoundException;
+import com.productrag.embedding.CatalogEntityType;
 import com.productrag.product.Product;
 import com.productrag.product.ProductRepository;
 import com.productrag.vectorsync.VectorSyncEventType;
 import com.productrag.vectorsync.VectorSyncOutbox;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -66,6 +69,14 @@ public class BrandService {
         return toResponses(List.of(find(id))).getFirst();
     }
 
+    /** Brands in the order of {@code ids}; unknown ids are skipped. */
+    @Transactional(readOnly = true)
+    public List<BrandResponse> getAll(List<UUID> ids) {
+        Map<UUID, Brand> found = new HashMap<>();
+        brandRepository.findAllById(ids).forEach(brand -> found.put(brand.getId(), brand));
+        return toResponses(ids.stream().map(found::get).filter(Objects::nonNull).toList());
+    }
+
     @Transactional
     public BrandResponse create(BrandRequest request) {
         String name = request.name().trim();
@@ -79,7 +90,9 @@ public class BrandService {
         Brand brand = new Brand();
         apply(brand, request, name, slug);
         brand.setStatus(request.status() == null ? CatalogStatus.ACTIVE : request.status());
-        return get(brandRepository.saveAndFlush(brand).getId());
+        Brand saved = brandRepository.saveAndFlush(brand);
+        outbox.enqueueEntity(CatalogEntityType.BRAND, saved.getId());
+        return get(saved.getId());
     }
 
     @Transactional
@@ -95,6 +108,7 @@ public class BrandService {
             throw slugConflict(slug);
         }
         boolean renamed = !name.equals(brand.getName());
+        String previousDescription = brand.getDescription();
         apply(brand, request, name, slug);
         if (request.status() != null) {
             brand.setStatus(request.status());
@@ -102,6 +116,9 @@ public class BrandService {
         Brand saved = brandRepository.saveAndFlush(brand);
         if (renamed) {
             propagateRename(saved);
+        }
+        if (renamed || !Objects.equals(previousDescription, saved.getDescription())) {
+            outbox.enqueueEntity(CatalogEntityType.BRAND, saved.getId());
         }
         return get(saved.getId());
     }
@@ -124,6 +141,7 @@ public class BrandService {
             throw new ConflictException("BRAND_IN_USE",
                     "The brand is assigned to products. Deactivate it instead of deleting it.");
         }
+        outbox.enqueueEntityDeleted(CatalogEntityType.BRAND, id);
         brandRepository.delete(brand);
         brandRepository.flush();
     }

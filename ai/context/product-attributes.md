@@ -1,6 +1,6 @@
 # Product attributes
 
-**Status:** done — backend, UI, tests, seeded. UI browser-verified on the scratch DB. API details: `ai/API_CONTRACTS.md`.
+**Status:** done — backend, UI, tests, seeded. Many-to-many categories (V4) browser-verified on scratch. API details: `ai/API_CONTRACTS.md`.
 
 ## Files
 - Backend `catalog/attribute/`: `ProductAttribute` (options as JSONB `List<String>`), `AttributeDataType`,
@@ -13,11 +13,15 @@
   moves values between typed fields and free-form rows when the category changes; blocks submit until loaded).
 
 ## Rules
-- Belongs to one category; applies to that category and all subcategories (`/applicable`, root first).
-- Name unique within the category; slug unique across the category's ancestors and descendants
-  (product values are keyed by slug), max 64.
+- Assigned to 1-20 categories (`product_attribute_categories`, V4); applies to those categories and all their
+  subcategories (`/applicable`, root first). Legacy `categoryId` in the body is still accepted.
+- Name (case-insensitive) and slug are globally unique (product values are keyed by slug), slug max 64.
+  Name clash -> 409 `ATTRIBUTE_ALREADY_EXISTS` (UI: Name field), slug clash -> 409 `SLUG_ALREADY_EXISTS` (Slug field).
 - SELECT: 1-50 non-blank, case-insensitively distinct options; other types: no options.
-- New attributes cannot be attached to an inactive category.
+- Newly assigned categories must be assignable (active, no inactive ancestor); existing links stay.
+- List filters: `q`, `categoryId`, `dataType`, `status`, `required`, `filterable`.
+- An option on a variant product may link to a SELECT or NUMBER attribute: SELECT restricts values to the
+  attribute's options (canonical casing), NUMBER appends the unit to variant labels.
 - Value validation (`AttributeValueValidator`, used by products and variants): STRING text; NUMBER number or
   numeric string (converted); BOOLEAN bool or "true"/"false"; SELECT must match an option (canonical casing
   stored). Required active attributes enforced for products (not variants). Inactive attributes: existing value
@@ -27,7 +31,7 @@
   API accepts at most 10 `attr` params; `pages/ProductListPage.tsx` lists the selected category's own attributes
   before inherited ones and refuses an 11th active filter with a toast.
 
-## Seed data (30; * = inactive, R = required, F = filterable)
+## Seed data (30, one category each; * = inactive, R = required, F = filterable)
 - Electronics: RAM (NUMBER GB, F), Storage Capacity (NUMBER GB, F), Processor (SELECT, F), Screen Size (NUMBER
   inches, F), Operating System (SELECT, F), Warranty Period (NUMBER months), Bluetooth Support (BOOLEAN, F),
   Wi-Fi Support (BOOLEAN, F), USB Type (SELECT, F), Refresh Rate (NUMBER Hz, F), Display Resolution (SELECT, F)
@@ -40,7 +44,8 @@
 - Footwear: Shoe Size (SELECT, R F) · Watches: Water Resistance (BOOLEAN, F) · Toys and Games: Age Group (SELECT, F)
 
 ## Tests
-- `ProductAttributeServiceTest` (8), `AttributeValueValidatorTest` (5), `CatalogFixturesTest` (fixture values
+- `ProductAttributeServiceTest` (13), `AttributeValueValidatorTest` (5),
+  `ProductManagementIntegrationTest.attributesAreGlobalAndCanApplyToSeveralCategories`, `CatalogFixturesTest` (fixture values
   validated through the real validator with inheritance); live API checks (typed errors, `attr` filter).
 
 ## Known issues

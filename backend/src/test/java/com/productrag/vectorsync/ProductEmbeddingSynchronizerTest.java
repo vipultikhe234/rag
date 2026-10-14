@@ -14,6 +14,7 @@ import com.productrag.product.ProductTestData;
 import com.productrag.support.FakeEmbeddingClient;
 import com.productrag.support.InMemoryEmbeddingStore;
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +34,7 @@ class ProductEmbeddingSynchronizerTest {
         store = new InMemoryEmbeddingStore();
         embeddingClient = new FakeEmbeddingClient();
         synchronizer = new ProductEmbeddingSynchronizer(repository, store, new EmbeddingContentBuilder(),
-                embeddingClient);
+                products -> Map.of(), embeddingClient);
         product = ProductTestData.headphones();
         when(repository.findById(product.getId())).thenAnswer(invocation -> Optional.of(product));
         when(repository.existsById(product.getId())).thenReturn(true);

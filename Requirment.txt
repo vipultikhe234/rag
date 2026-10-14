@@ -489,3 +489,173 @@ The route for `/products/:id` is defined before `/products/:id/edit`, which mean
 
 Affected files:
 - frontend/src/App.tsx (lines 82-109)
+
+
+================================================================================
+IMPLEMENTATION STATUS (updated 2026-10-14)
+================================================================================
+
+Legend: [DONE] implemented and verified by executed tests / live checks,
+        [NOT DONE] deliberately not implemented (reason given), [NO CHANGE] verified, nothing to fix.
+Details live in ai/context/product-embeddings.md, ai/context/embedding-sync.md, ai/context/semantic-search.md.
+
+--------------------------------------------------------------------------------
+PART 1 - Semantic search and embedding synchronization
+--------------------------------------------------------------------------------
+
+1. Role and objective ............................................ [DONE]
+   Existing stack kept: Spring Boot 3.5 / Java 21, PostgreSQL 16 + pgvector, Spring AI with Ollama
+   nomic-embed-text (768 dimensions). No framework or database change.
+
+2. Research and project inspection ............................... [DONE]
+   Sources (ai/RESEARCH.md, section "Semantic search and embedding sync research"):
+   - pgvector README: https://github.com/pgvector/pgvector
+   - Ollama nomic-embed-text: https://ollama.com/library/nomic-embed-text
+   - Model card: https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
+   Findings: products reference brands/categories by FK (brand_id, category_id) plus mirrored name columns;
+   attribute values are product JSONB keyed by attribute slug; variants hold SKU, price, compare-at price, stock
+   and option values (variant_option_values); a transactional outbox (vector_sync_events) and worker already
+   existed. Recorded in ai/RESEARCH.md, ai/ARCHITECTURE.md, ai/DATABASE.md, ai/REQUIREMENTS.md.
+
+3. Embedding strategy
+   A. Product embeddings ......................................... [DONE]
+      One embedding per product. Document: name, SKU, category path ("Electronics > Mobiles > Smartphones"),
+      brand, description, attributes with display names and units ("RAM: 12 GB"), and option values of ACTIVE
+      variants ("Color: Black, Blue; Storage: 256 GB, 512 GB"). Price and stock are NOT in the text.
+      Code: EmbeddingContentBuilder, JdbcProductSearchContextLoader. Query embeddings are never stored.
+   B. Brand embeddings ........................................... [NOT DONE - by design]
+   C. Category embeddings ........................................ [NOT DONE - by design]
+      No semantic brand/category discovery use case was approved. Brand and category are exact SQL filters,
+      and their names are part of every product document.
+   D. Attribute embeddings ....................................... [NOT DONE - by design]
+      Attribute names/values are in the product document; attribute filtering is SQL.
+   E. Variant embeddings ......................................... [NOT DONE - by design]
+      Variant option values are summarised in the parent product document (max 20 values per option);
+      SKU, option, price and stock checks query product_variants directly.
+
+4. Vector storage design ......................................... [DONE - existing table reused, no migration]
+   Table product_embeddings: id, product_id (unique, FK), content, content_hash (SHA-256),
+   embedding vector(768), embedding_model, source_version, source_updated_at, created_at, updated_at.
+   Dimension enforced by the column type and checked at startup (EmbeddingSchemaVerifier).
+   Status / attempts / last error / processed time are kept per job in vector_sync_events.
+   Entity type is implicit (products only). No user data in documents.
+
+5. Embedding provider ............................................ [DONE - existing provider reused]
+   Model and dimensions come from .env / application.yml; keys never hardcoded or logged. Vector length is
+   validated before saving; timeouts / rate limits / 5xx are retried with bounded backoff; a model change is
+   detected through embedding_model and handled by "Refresh outdated embeddings". Nothing runs at startup.
+
+6. Product indexing and synchronization .......................... [DONE]
+   Central service: ProductEmbeddingSynchronizer (load product + related data, build document, hash, skip when
+   hash and model unchanged, embed, upsert by product_id, guard against older versions).
+   Triggers (queued in the same transaction as the change):
+   - Product created / updated / deactivated / reactivated / deleted.
+   - Brand rename -> products of that brand.
+   - Category rename or move -> products of the category and all its subcategories.
+   - Attribute name / slug / type / unit change -> only products that use that attribute.
+   - Variant created, options changed, or activated/deactivated -> parent product.
+   - Price-only or stock-only changes -> no re-embedding.
+   Deactivated products stay stored but are excluded from every search query (status = 'ACTIVE' join).
+   Reactivation queues the product; the hash check confirms the embedding is current.
+
+7. Reliable asynchronous processing .............................. [DONE - existing outbox extended]
+   Outbox rows written in the business transaction; worker claims with FOR UPDATE SKIP LOCKED, embeds outside
+   any DB transaction, retries with exponential backoff, marks FAILED after the limit, failed events visible in
+   the admin panel. Older jobs cannot overwrite newer embeddings (source_version check). Duplicate pending
+   events for one product are not created by bulk triggers.
+
+8. Semantic search API ........................................... [DONE]
+   GET /api/v1/products/semantic-search?q=...&categoryId=&brandId=&minPrice=&maxPrice=&inStock=&option=Name:Value&limit=
+   Flow: validate -> exact SKU match + vector top 100 + keyword top 20 -> SQL verification (ACTIVE, category
+   subtree, brand, price, stock, all options on the same active variant) -> live product and variant data.
+   Returns similarity, match type and matching variants. Falls back to keyword search if the embedding
+   provider is down. No LLM involved.
+   Example: q=samsung phone&brandId=<Samsung id>&option=Storage Capacity:512 GB&inStock=true
+
+9. Structured search and entity discovery ........................ [DONE]
+   Brand, category, attribute and variant filtering are structured (SQL). Only products are indexed.
+
+10. Reindexing and data repair ................................... [DONE]
+   Admin panel / API (POST /api/v1/admin/vector-sync/...):
+   - resync-missing  : products with no embedding
+   - retry-failed    : failed jobs
+   - refresh-stale   : NEW - rebuilds each ACTIVE product's document in batches of 200 (keyset paging),
+                       compares hash and model, queues only outdated products. Resumable, idempotent,
+                       never deletes a vector before its replacement exists.
+   - status          : progress and errors
+
+11. Performance and database safety .............................. [DONE / partly NOT DONE]
+   Cosine similarity, bounded candidates (100 vector, 20 keyword, max 50 results), batched context loading
+   (3 queries per batch, no N+1), prices/stock always read live, no embedding on read except the query itself.
+   [NOT DONE] HNSW index: catalog is small (31 products), exact scan is used. Add the index in a new migration
+   when the catalog grows, together with hnsw.ef_search / iterative scans for filtered queries.
+   No destructive migration or reset was run on RagDB.
+
+12. Tests ........................................................ [DONE]
+   Unit: EmbeddingContentBuilderTest, ProductEmbeddingSynchronizerTest, VectorSyncProcessorTest,
+   StaleEmbeddingScannerTest, SemanticProductSearchServiceTest, SemanticSearchControllerTest,
+   CategoryServiceTest, ProductAttributeServiceTest, ProductVariantServiceTest, CatalogOverviewTest,
+   QueryIntentParserTest. Integration (isolated DB ragdb_it_test, fake embedding model, no paid API calls):
+   ProductManagementIntegrationTest, ProductRagIntegrationTest.
+
+13. AI documentation ............................................. [DONE]
+   Updated ai/RESEARCH, ARCHITECTURE, DATABASE, API_CONTRACTS, REQUIREMENTS, TASKS, CHANGELOG, TESTING, PROJECT;
+   new ai/context/product-embeddings.md, embedding-sync.md, semantic-search.md. Also README.md,
+   docs/vector-sync.md, docs/rag-flow.md, docs/api-examples.md.
+
+14. Implementation order ......................................... [DONE] (step 11, brand/category indexing,
+   not approved -> not built)
+
+Tests actually executed (2026-10-14):
+   - mvnw -o test (unit + WebMvc)                    : 263 run, 0 failures, 0 errors, 26 skipped (integration)
+   - Integration on ragdb_it_test                    : 26/26 passed
+   - npm run lint, npm run build                     : clean
+   - Live on RagDB: refresh-stale checked 31 / stale 0; 5 semantic-search queries returned the expected products
+
+Remaining / not done:
+   - nomic "search_document:" / "search_query:" prefixes (would re-embed everything; needs an A/B check).
+   - HNSW index (see 11).
+   - The semantic-search API does not parse free text such as "under 50000" (use minPrice/maxPrice);
+     the chat does parse it.
+   - A query with no real match (e.g. "jeans") still returns the closest products above the threshold.
+   - No semantic-search UI page yet (API only).
+
+--------------------------------------------------------------------------------
+PART 2 - "how much brand we have" returned 2 instead of 41 ........... [DONE]
+--------------------------------------------------------------------------------
+Cause: the question went through vector search, which returns only the top few similar products, and the
+LLM counted the brands of those products (Nike, Levi's). Embeddings cannot answer "how many / list all".
+Fix: new CATALOG retrieval strategy (rag/CatalogOverview). Questions about the number or list of brands,
+categories, attributes or variants are answered directly from the database tables, without the LLM.
+Verified live on RagDB: "how many brands" -> 41 brands (38 active, 3 inactive), same as the Brands page
+(totalElements 41); "list all categories" -> 40 categories.
+Also: when a question names exactly one known brand ("Samsung phones"), that brand becomes an exact filter.
+Embeddings were also checked: refresh-stale found all 31 product embeddings current.
+
+--------------------------------------------------------------------------------
+PART 3 - Bug reports (verified, not bugs, no code change) ............. [NO CHANGE]
+--------------------------------------------------------------------------------
+Bug 1 (ProductOptionService, error message uses `requested`):
+   Intentional. The message quotes the value the user typed, so the user recognises it in the error
+   ("'256.0' is not a value of option 'Storage'..."). Showing the internal canonical form would be more confusing.
+Bug 2 (CatalogFixturesTest, random category UUIDs):
+   Not a bug. The UUIDs only satisfy Bean Validation of the request shape; the same test then checks every
+   assigned category by slug against the fixture (exists and ACTIVE). The `categoryIds` map belongs to a
+   different test method (productsAndVariantsPassRequestAndAttributeValidation).
+Bug 3 (App.tsx, /products/:id before /products/:id/edit):
+   Not a bug. React Router ranks routes by specificity, not by order, and `:id` matches one URL segment only,
+   so /products/123/edit always reaches the edit page (confirmed with matchRoutes).
+
+--------------------------------------------------------------------------------
+PART 4 - Embeddings for all modules (request "create embedding for all module") ... [DONE]
+--------------------------------------------------------------------------------
+The rule "Do not create embeddings for brands, categories, attributes, and variants ... without identifying a
+user-facing search use case" is satisfied: the user approved two use cases on 2026-10-14.
+- Storage: one shared table catalog_embeddings (migration V5), same model and dimension as products.
+- Use cases: GET /api/v1/{brands|categories|product-attributes|product-variants}/semantic-search, and chat
+  discovery questions ("Which brands make gaming laptops?" -> strategy DISCOVERY, answered without the LLM).
+- Rich brand/category documents (their products and categories), kept in sync through the same outbox;
+  admin "Index missing" and "Refresh outdated embeddings" cover all modules.
+Verified: 293 unit tests (0 failures), 29/29 integration tests on ragdb_it_test, lint/build clean; V5 applied to
+RagDB and 38 brands, 36 categories, 28 attributes, 28 variants indexed (0 failed, 0 stale); live searches and
+chat discovery questions checked. Details: ai/context/catalog-embeddings.md.

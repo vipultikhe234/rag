@@ -1,5 +1,6 @@
 package com.productrag.vectorsync.dto;
 
+import com.productrag.embedding.CatalogEntityType;
 import java.time.Instant;
 import java.util.List;
 
@@ -17,5 +18,10 @@ public record VectorSyncStatusResponse(
         Instant oldestPendingAt,
         long embeddedProducts,
         long activeProductsWithoutEmbedding,
+        List<CatalogIndex> catalogIndex,
         List<VectorSyncEventResponse> recentFailures) {
+
+    /** Embeddings stored for one entity type, and ACTIVE entities of that type without one for the current model. */
+    public record CatalogIndex(CatalogEntityType entityType, long embedded, long activeWithoutEmbedding) {
+    }
 }

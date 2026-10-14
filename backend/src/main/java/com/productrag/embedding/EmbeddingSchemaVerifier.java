@@ -29,16 +29,18 @@ public class EmbeddingSchemaVerifier implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        Integer columnDimensions = jdbcTemplate.queryForObject("""
-                SELECT a.atttypmod FROM pg_attribute a
-                WHERE a.attrelid = 'product_embeddings'::regclass AND a.attname = 'embedding' AND NOT a.attisdropped
-                """, Integer.class);
-        if (columnDimensions == null || columnDimensions != configuredDimensions) {
-            throw new IllegalStateException("product_embeddings.embedding is vector(" + columnDimensions
-                    + ") but EMBEDDING_DIMENSIONS=" + configuredDimensions
-                    + ". Use the same dimension, or add a migration that changes the column and re-sync embeddings"
-                    + " (see docs/vector-sync.md).");
+        for (String table : new String[] {"product_embeddings", "catalog_embeddings"}) {
+            Integer columnDimensions = jdbcTemplate.queryForObject("""
+                    SELECT a.atttypmod FROM pg_attribute a
+                    WHERE a.attrelid = to_regclass(?) AND a.attname = 'embedding' AND NOT a.attisdropped
+                    """, Integer.class, table);
+            if (columnDimensions == null || columnDimensions != configuredDimensions) {
+                throw new IllegalStateException(table + ".embedding is vector(" + columnDimensions
+                        + ") but EMBEDDING_DIMENSIONS=" + configuredDimensions
+                        + ". Use the same dimension, or add a migration that changes the column and re-sync"
+                        + " embeddings (see docs/vector-sync.md).");
+            }
+            log.info("pgvector column dimension verified for {}: {}", table, columnDimensions);
         }
-        log.info("pgvector column dimension verified: {}", columnDimensions);
     }
 }

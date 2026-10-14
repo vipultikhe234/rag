@@ -8,9 +8,35 @@ PostgreSQL 16, local DB `RagDB` (credentials only in `.env`). JPA `ddl-auto: non
 | `V1__initial_schema.sql` | extensions, products, product_embeddings, vector_sync_events, app_users, chat tables | yes |
 | `V2__align_embedding_dimension.sql` | embedding column dimension = `${embedding_dimensions}` | yes |
 | `V3__catalog_modules.sql` | catalog tables + product FKs + backfill | yes (also on scratch `ragdb_catalog_check`) |
-| `V4__product_options_and_media.sql` | options, option values, variant options, images, product slug/has_variants, compare-at price, barcode, attribute-category join | **not yet**; applied and verified on scratch `ragdb_v4_check` (copy of RagDB data) and `ragdb_it_test` |
+| `V4__product_options_and_media.sql` | options, option values, variant options, images, product slug/has_variants, compare-at price, barcode, attribute-category join | yes (2026-10-14, after verification on scratch DBs `ragdb_v4_check` and `ragdb_it_test`) |
+| `V5__catalog_embeddings.sql` | `catalog_embeddings`; outbox `chk_vse_event_type` + `ENTITY_*` types, new `chk_vse_aggregate_type` | yes (2026-10-14, after `ragdb_it_test`; additive, no data changed) |
+
+## Catalog embeddings (V5)
+- `catalog_embeddings`: id, `entity_type` (BRAND/CATEGORY/ATTRIBUTE/VARIANT, check), `entity_id` (no FK; rows of
+  deleted entities are removed by the worker), `content`, `embedding vector(${embedding_dimensions})`,
+  `content_hash`, `embedding_model`, `source_read_at` (stale-write guard: an upsert only wins when it read the
+  source at the same time or later), timestamps. Unique (entity_type, entity_id); idx (entity_type, embedding_model).
+- `vector_sync_events.aggregate_type` is now checked: PRODUCT/BRAND/CATEGORY/ATTRIBUTE/VARIANT; new event types
+  `ENTITY_CHANGED`, `ENTITY_DELETED`, `ENTITY_RESYNC_REQUESTED`. Payload `{entityType, name, sku?}`.
+- `EmbeddingSchemaVerifier` checks the vector dimension of both `product_embeddings` and `catalog_embeddings`.
+- Documents are built by `CatalogDocumentLoader` (parameterized JDBC); searches join the source table and keep
+  only ACTIVE rows (variants also need an ACTIVE product). Exact cosine scan, no ANN index (130 rows on `RagDB`).
 
 Rule: never edit an applied migration; add `V{n+1}__*.sql`.
+
+## Embeddings (semantic search round, 2026-10-14: no new migration needed)
+- `product_embeddings` (V1/V2) already covers the stored-record requirements: `id`, `product_id` (unique, FK
+  CASCADE; entity type is implicit — products only), `chunk_index` (always 0), `content` (the normalized document),
+  `content_hash` (SHA-256), `embedding vector(EMBEDDING_DIMENSIONS)` (dimension enforced by the column type and
+  checked at startup by `EmbeddingSchemaVerifier`), `embedding_model`, `source_version` / `source_updated_at`
+  (stale-write guard), `created_at` / `updated_at` (last successful indexing).
+- Indexing status, attempts, errors and processed time live in `vector_sync_events` (`status`, `attempts`,
+  `last_error` redacted, `processed_at`, `result`).
+- No ANN index yet (exact cosine scan; 31 products). Add HNSW in a new migration when the catalog grows
+  (`docs/vector-sync.md`). Existing B-tree/trigram indexes serve the SQL verification and keyword steps.
+- Queries used by semantic search and sync are parameterized JDBC (`JdbcSearchCandidateStore`,
+  `JdbcProductSearchContextLoader`, `JdbcOutboxStore`): category subtree via recursive CTE, option checks via
+  `variant_option_values` -> `product_options` / `product_option_values`, `jsonb_exists` for attribute keys.
 
 ## V4 (implemented)
 - `products`: + `slug` (`uq_products_slug`, format check; backfilled from name, hash suffix on collision),
@@ -69,9 +95,15 @@ Unique-constraint names are mapped to API error codes in `GlobalExceptionHandler
 Required fixture counts: 30 per module, 120 total (fixture records identified by slug/SKU; pre-existing
 backfilled rows are not counted).
 
-## Current `RagDB` contents (after V3 seeding, 2026-10-13; before V4)
+## Current `RagDB` contents (V4 applied 2026-10-14)
 - categories 40 (30 fixtures + 10 backfilled), brands 41 (29 created + Apple reused + 11 other backfilled),
-  product_attributes 30, product_variants 30, products 31 (21 existing + 10 prerequisite).
-- No embedding columns or vector rows for catalog tables; only products are embedded.
+  product_attributes 30, product_variants 30, products 31 (21 existing + 10 prerequisite, all 10 now
+  `has_variants`).
+- V4 check via the API after migrating: every variant has option values and no leftover attribute keys;
+  11 compare-at prices, all > price; variant product price/stock equal the active-variant summary; every product
+  has a slug. Seed rerun: 0 created, 130 reused, verification 30/30/30/10/30.
+- V5 applied 2026-10-14 (4 -> 5). `catalog_embeddings` filled through the outbox (`resync-missing`): 38 brands,
+  36 categories, 28 attributes, 28 variants = every ACTIVE entity; 0 failed events, refresh-stale 0 stale.
+  Inactive entities (3 brands, 4 categories, 2 attributes, 2 variants) get embedded when they next change.
 - Scratch DBs (local, not RagDB): `ragdb_catalog_check` (V3 fixtures), `ragdb_v4_check` (V4 migration check),
   `ragdb_it_test` (integration tests + browser checks). Drop only with the owner's go-ahead.

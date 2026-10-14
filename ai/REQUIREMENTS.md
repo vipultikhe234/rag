@@ -65,4 +65,32 @@ inventory; no orders module exists.
 - Swagger/OpenAPI only if it can be added without disruption.
 - Keep products compatible with semantic search/RAG: `products.category` / `products.brand` text columns stay
   and are kept in sync with the linked records.
-- Do not create embeddings for the four admin modules.
+- ~~Do not create embeddings for the four admin modules.~~ Superseded on 2026-10-14 (see "Embeddings for all
+  catalog modules" below).
+
+## Semantic search and embedding sync (`Requirment.txt`, 2026-10-14)
+- One embedding per product from a deterministic document: name, SKU, category path, brand, description,
+  attribute names/values/units, option values of active variants. No price/stock in the text.
+- No brand, category, attribute or variant embeddings unless a semantic discovery use case is approved
+  (approved later the same day, see below).
+- Re-embed only when the document changes: product create/update, brand rename, category rename/move (whole
+  subtree), attribute name/slug/type/unit change, variant create / option change / status change. Never for
+  price- or stock-only edits. Deactivated products are excluded at query time; reactivation re-verifies the hash.
+- Reliable async processing with the existing outbox, retries with backoff, failed-job inspection, stale-job
+  protection (`source_version`).
+- Semantic search API with exact SKU, vector and keyword candidates, verified by structured filters (category
+  subtree, brand, price, stock, variant options); authoritative prices and stock from the database; no LLM.
+- Admin repair: index missing, retry failed, refresh stale (hash/model compare), batched, resumable, no
+  delete-before-replace, nothing at startup.
+- Chat must answer catalog questions exactly ("how many brands" = all 41, not the brands of retrieved products).
+
+## Embeddings for all catalog modules (request of 2026-10-14, "create embedding for all module")
+Decisions confirmed by the user:
+- One shared table `catalog_embeddings` (entity_type + entity_id) for brands, categories, attributes, variants.
+- Use cases: a semantic search API per module, and chat discovery questions ("which brands make gaming
+  laptops?", "which category fits running gear?").
+- Rich documents: a brand lists the categories and names of its active products; a category lists its path,
+  subcategories, brands and products in its subtree; re-embedded when that summary changes.
+- Apply V5 to `RagDB` and index all modules after verification on the scratch DB.
+Same rules as products: outbox + retries, no provider call inside a DB transaction, no price/stock in documents,
+only ACTIVE entities in results, live data from PostgreSQL, no LLM for the discovery answer.

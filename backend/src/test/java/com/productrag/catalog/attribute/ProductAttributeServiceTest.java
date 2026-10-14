@@ -19,6 +19,7 @@ import com.productrag.catalog.category.CategoryRepository;
 import com.productrag.catalog.category.CategoryTestData;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.FieldValidationException;
+import com.productrag.vectorsync.VectorSyncOutbox;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +39,8 @@ class ProductAttributeServiceTest {
     private ProductAttributeRepository attributeRepository;
     @Mock
     private CategoryRepository categoryRepository;
+    @Mock
+    private VectorSyncOutbox outbox;
 
     private final Map<UUID, ProductAttribute> store = new HashMap<>();
     private final Map<UUID, Category> categories = new HashMap<>();
@@ -49,7 +52,7 @@ class ProductAttributeServiceTest {
     @BeforeEach
     void setUp() {
         service = new ProductAttributeService(attributeRepository, categoryRepository,
-                new CategoryAssignability(categoryRepository));
+                new CategoryAssignability(categoryRepository), outbox);
         phones = CategoryTestData.category("Mobile Phones", "mobile-phones", electronics.getId(), CatalogStatus.ACTIVE);
         laptops = CategoryTestData.category("Laptops", "laptops", electronics.getId(), CatalogStatus.ACTIVE);
         List.of(electronics, phones, laptops).forEach(c -> categories.put(c.getId(), c));
@@ -190,6 +193,20 @@ class ProductAttributeServiceTest {
 
         assertThat(updated.required()).isTrue();
         assertThat(updated.categories()).extracting(ProductAttributeResponse.CategoryRef::active).containsExactly(false);
+    }
+
+    @Test
+    void onlyNameSlugTypeOrUnitChangesReembedProductsThatUseTheAttribute() {
+        ProductAttributeResponse created = service.create(request(List.of(phones.getId()), "RAM",
+                AttributeDataType.NUMBER, null, "GB"));
+
+        service.update(created.id(), new ProductAttributeRequest(List.of(phones.getId()), null, "RAM", null,
+                AttributeDataType.NUMBER, null, "GB", true, false, null, null));
+        verify(outbox, never()).enqueueForAttribute(any(), any());
+
+        service.update(created.id(), new ProductAttributeRequest(List.of(phones.getId()), null, "Memory", null,
+                AttributeDataType.NUMBER, null, "GB", true, false, null, null));
+        verify(outbox).enqueueForAttribute(created.id(), "ram");
     }
 
     @Test

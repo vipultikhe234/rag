@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -72,6 +73,13 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     @Query("select distinct p.category from Product p where p.status = com.productrag.product.ProductStatus.ACTIVE")
     List<String> findDistinctActiveCategories();
+
+    @Query("select distinct p.brand from Product p where p.status = com.productrag.product.ProductStatus.ACTIVE"
+            + " and p.brand is not null")
+    List<String> findDistinctActiveBrands();
+
+    /** Keyset page: products with the status and an id after {@code afterId}, in id order. */
+    List<Product> findByStatusAndIdGreaterThanOrderByIdAsc(ProductStatus status, UUID afterId, Pageable pageable);
 
     /**
      * Active products whose full name appears verbatim (case-insensitive) in the given text.

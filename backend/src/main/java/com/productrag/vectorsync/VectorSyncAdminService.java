@@ -5,9 +5,13 @@ import com.productrag.common.api.PageResponse;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.NotFoundException;
 import com.productrag.config.AppProperties;
+import com.productrag.embedding.CatalogEmbeddingStore;
+import com.productrag.embedding.CatalogEntityType;
 import com.productrag.embedding.ProductEmbeddingStore;
 import com.productrag.vectorsync.dto.VectorSyncEventResponse;
 import com.productrag.vectorsync.dto.VectorSyncStatusResponse;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,16 +30,25 @@ public class VectorSyncAdminService {
     private final AiProviderStatus aiProviderStatus;
     private final ApplicationEventPublisher publisher;
     private final AppProperties.VectorSync settings;
+    private final CatalogEmbeddingStore catalogEmbeddingStore;
+    private final StaleEmbeddingScanner staleEmbeddingScanner;
+    private final CatalogStaleEmbeddingScanner catalogStaleScanner;
 
     public VectorSyncAdminService(OutboxStore outboxStore, VectorSyncEventRepository eventRepository,
                                   ProductEmbeddingStore embeddingStore, AiProviderStatus aiProviderStatus,
-                                  ApplicationEventPublisher publisher, AppProperties properties) {
+                                  ApplicationEventPublisher publisher, AppProperties properties,
+                                  CatalogEmbeddingStore catalogEmbeddingStore,
+                                  StaleEmbeddingScanner staleEmbeddingScanner,
+                                  CatalogStaleEmbeddingScanner catalogStaleScanner) {
         this.outboxStore = outboxStore;
         this.eventRepository = eventRepository;
         this.embeddingStore = embeddingStore;
         this.aiProviderStatus = aiProviderStatus;
         this.publisher = publisher;
         this.settings = properties.vectorSync();
+        this.catalogEmbeddingStore = catalogEmbeddingStore;
+        this.staleEmbeddingScanner = staleEmbeddingScanner;
+        this.catalogStaleScanner = catalogStaleScanner;
     }
 
     public VectorSyncStatusResponse status() {
@@ -58,7 +71,17 @@ public class VectorSyncAdminService {
                 outboxStore.oldestPendingCreatedAt().orElse(null),
                 embeddingStore.countEmbeddings(),
                 embeddingStore.countActiveProductsWithoutCurrentEmbedding(aiProviderStatus.embeddingModel()),
+                catalogIndex(),
                 recentFailures.getContent().stream().map(VectorSyncEventResponse::from).toList());
+    }
+
+    private List<VectorSyncStatusResponse.CatalogIndex> catalogIndex() {
+        Map<CatalogEntityType, Long> embedded = catalogEmbeddingStore.countByType();
+        String model = aiProviderStatus.embeddingModel();
+        return Arrays.stream(CatalogEntityType.values())
+                .map(type -> new VectorSyncStatusResponse.CatalogIndex(type, embedded.getOrDefault(type, 0L),
+                        catalogEmbeddingStore.countActiveWithoutEmbedding(type, model)))
+                .toList();
     }
 
     public PageResponse<VectorSyncEventResponse> events(VectorSyncStatus status, UUID productId, Pageable pageable) {
@@ -92,12 +115,31 @@ public class VectorSyncAdminService {
         return count;
     }
 
-    public int resyncMissing() {
-        int count = outboxStore.enqueueResyncForMissingEmbeddings(aiProviderStatus.embeddingModel(),
-                settings.maxAttempts());
-        if (count > 0) {
+    /** Queues ACTIVE products and catalog entities that have no embedding for the current model. */
+    public MissingResult resyncMissing() {
+        String model = aiProviderStatus.embeddingModel();
+        int products = outboxStore.enqueueResyncForMissingEmbeddings(model, settings.maxAttempts());
+        int catalog = outboxStore.enqueueMissingCatalogEmbeddings(model, settings.maxAttempts());
+        if (products + catalog > 0) {
             publisher.publishEvent(new VectorSyncRequested(null));
         }
-        return count;
+        return new MissingResult(products, catalog);
+    }
+
+    /** Products (top-level counts, as before) and catalog entities whose embedding is missing or outdated. */
+    public RefreshResult refreshStale() {
+        StaleEmbeddingScanner.Result products = staleEmbeddingScanner.refreshStale();
+        CatalogStaleEmbeddingScanner.Result catalog = catalogStaleScanner.refreshStale();
+        if (catalog.enqueued() > 0) {
+            publisher.publishEvent(new VectorSyncRequested(null));
+        }
+        return new RefreshResult(products.checked(), products.stale(), products.enqueued(), catalog);
+    }
+
+    /** @param enqueued products queued (kept for existing clients); catalog entities are counted separately */
+    public record MissingResult(int enqueued, int catalogEnqueued) {
+    }
+
+    public record RefreshResult(long checked, long stale, long enqueued, CatalogStaleEmbeddingScanner.Result catalog) {
     }
 }

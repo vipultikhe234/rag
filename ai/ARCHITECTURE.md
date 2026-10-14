@@ -12,10 +12,30 @@ Details: `docs/architecture.md`, `docs/rag-flow.md`, `docs/vector-sync.md`.
 - `catalog`: `category`, `brand`, `attribute`, `variant` sub-packages (entity, repository, specifications,
   service, controller, `dto/`), shared `CatalogStatus`, `Slugs`, `Counts`, `CatalogText`, `StatusRequest`,
   `validation/HttpUrl`.
-- `vectorsync`: `VectorSyncOutbox.enqueue(product, type)` must run inside the product write transaction
-  (propagation MANDATORY); worker embeds asynchronously.
-- `embedding`: `EmbeddingContentBuilder` builds embedded text from product name, category, brand, attributes.
-- `rag`/`chat`/`ai`: retrieval (structured SQL + pgvector), prompt building, streaming chat via SSE.
+- `vectorsync`: `VectorSyncOutbox` (`enqueue(product, type)`, bulk `enqueueForCategories`, `enqueueForAttribute`)
+  must run inside the write transaction (propagation MANDATORY); worker embeds asynchronously;
+  `StaleEmbeddingScanner` queues products whose stored hash/model is outdated.
+- `embedding`: `EmbeddingContentBuilder` + `ProductSearchContextLoader` build the product search document
+  (see `ai/context/product-embeddings.md`).
+- `search`: `GET /products/semantic-search` (see `ai/context/semantic-search.md`).
+- `rag`/`chat`/`ai`: retrieval (catalog overview, structured SQL, pgvector), prompt building, streaming chat via SSE.
+
+## Semantic search and embeddings (2026-10-14)
+- Indexed entities: products (`product_embeddings`, unique `product_id`) and, since V5, brands, categories,
+  attributes and variants (`catalog_embeddings`, unique `(entity_type, entity_id)`; `ai/context/catalog-embeddings.md`).
+  Catalog entities still contribute text to the product document and are filtered with SQL in product search.
+- Fan-out: every product event also queues its brand, its category chain and its variants (their documents
+  summarise or show the product); unchanged documents are skipped by hash, so only real changes are embedded.
+- Sync: catalog writes -> outbox rows in the same transaction -> worker (`FOR UPDATE SKIP LOCKED`) -> hash check
+  -> embed outside any transaction -> upsert guarded by `source_version` (`ai/context/embedding-sync.md`).
+- Read path: query embedded once per request, never stored; vector candidates, exact SKU and keyword matches are
+  verified by SQL against status, category subtree, brand, price, stock and variant options; price/stock come from
+  `products` / `product_variants`.
+- Chat: `CatalogOverview` answers whole-catalog questions (brands, categories, attributes, variants) from tables;
+  `CatalogDiscovery` answers "which brands/categories/attributes/variants ... <topic>" from `catalog_embeddings`
+  (strategy `DISCOVERY`, no LLM); `QueryIntentParser` adds a brand filter when exactly one known brand is named.
+- `search`: also `GET /{brands|categories|product-attributes|product-variants}/semantic-search`
+  (`CatalogSemanticSearchService`: name matches + vectors, keyword-only fallback).
 
 ## Frontend
 - `src/api` (Axios client with JWT, `endpoints.ts`, `types.ts`, error normalization, SSE chat stream),
@@ -33,13 +53,14 @@ Details: `docs/architecture.md`, `docs/rag-flow.md`, `docs/vector-sync.md`.
 ## Module relationships
 - Product -> Category (`category_id`, required by the app) and Brand (`brand_id`, optional). The text columns
   `products.category` / `products.brand` mirror the linked names (used by RAG and embeddings); renaming a
-  category/brand updates them and enqueues `PRODUCT_UPDATED` outbox events.
+  category/brand updates them and enqueues `PRODUCT_UPDATED` outbox events (a category rename or move also queues
+  products of its subcategories, whose category path changed).
 - Category -> parent Category (self reference). Attribute definition -> Category (inherited by subcategories).
 - Product attribute values live in `products.attributes`, keyed by attribute slug; validated by
   `AttributeValueValidator`. Keys without a definition remain allowed (free-form, backward compatible).
 - Variant -> Product (`product_id`, RESTRICT). Products with variants cannot be deleted.
 
-## Product management design (V4, planned; see `ai/RESEARCH.md`)
+## Product management design (V4, implemented; see `ai/RESEARCH.md`)
 - Product = shared identity (name, slug, description, category, brand, images, specs `attributes`, status).
   Simple product (`hasVariants=false`): product-level SKU, price, stock. Variant product: options (max 3,
   values max 50 each) and variants (max 100); each variant = one option combination with SKU, price,

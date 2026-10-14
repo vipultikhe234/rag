@@ -217,6 +217,25 @@ class CategoryServiceTest {
     }
 
     @Test
+    void renamingOrMovingACategoryReembedsItsWholeSubtree() {
+        Category electronics = save(CategoryTestData.active("Electronics", "electronics"));
+        Category computers = save(CategoryTestData.active("Computers", "computers"));
+        Category laptops = save(CategoryTestData.category("Laptops", "laptops", computers.getId(),
+                CatalogStatus.ACTIVE));
+        List<UUID> subtree = List.of(computers.getId(), laptops.getId());
+        lenient().when(categoryRepository.findSelfAndDescendantIds(computers.getId())).thenReturn(subtree);
+
+        service.update(computers.getId(), request("Computers", null, null, 0L));
+        verify(outbox, never()).enqueueForCategories(any());
+
+        service.update(computers.getId(), request("Computing", null, null, 0L));
+        verify(outbox).enqueueForCategories(subtree);
+
+        service.update(computers.getId(), request("Computing", null, electronics.getId(), 0L));
+        verify(outbox, org.mockito.Mockito.times(2)).enqueueForCategories(subtree);
+    }
+
+    @Test
     void deactivationKeepsReferencesAndDoesNotTouchProducts() {
         Category laptops = save(CategoryTestData.active("Laptops", "laptops"));
 

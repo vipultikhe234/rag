@@ -73,7 +73,7 @@ public class ProductVariantController {
     }
 
     /** Parses repeated {@code option=Name:Value} parameters (e.g. option=Color:Black). */
-    static Map<String, String> optionFilters(List<String> params) {
+    public static Map<String, String> optionFilters(List<String> params) {
         if (params == null || params.isEmpty()) {
             return Map.of();
         }

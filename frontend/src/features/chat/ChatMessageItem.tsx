@@ -10,6 +10,8 @@ const STRATEGY_LABELS: Record<string, string> = {
   HYBRID: 'Database filter + semantic search',
   SEMANTIC: 'Semantic search',
   CLARIFICATION: 'Clarification needed',
+  CATALOG: 'Catalog totals from the database',
+  DISCOVERY: 'Brand / category / attribute / variant search',
 }
 
 interface ChatMessageItemProps {

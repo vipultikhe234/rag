@@ -4,6 +4,7 @@ import com.productrag.ai.EmbeddingClient;
 import com.productrag.embedding.EmbeddingContentBuilder;
 import com.productrag.embedding.EmbeddingMetadata;
 import com.productrag.embedding.ProductEmbeddingStore;
+import com.productrag.embedding.ProductSearchContextLoader;
 import com.productrag.product.Product;
 import com.productrag.product.ProductRepository;
 import java.util.Optional;
@@ -28,13 +29,16 @@ public class ProductEmbeddingSynchronizer {
     private final ProductRepository productRepository;
     private final ProductEmbeddingStore embeddingStore;
     private final EmbeddingContentBuilder contentBuilder;
+    private final ProductSearchContextLoader contextLoader;
     private final EmbeddingClient embeddingClient;
 
     public ProductEmbeddingSynchronizer(ProductRepository productRepository, ProductEmbeddingStore embeddingStore,
-                                        EmbeddingContentBuilder contentBuilder, EmbeddingClient embeddingClient) {
+                                        EmbeddingContentBuilder contentBuilder, ProductSearchContextLoader contextLoader,
+                                        EmbeddingClient embeddingClient) {
         this.productRepository = productRepository;
         this.embeddingStore = embeddingStore;
         this.contentBuilder = contentBuilder;
+        this.contextLoader = contextLoader;
         this.embeddingClient = embeddingClient;
     }
 
@@ -47,7 +51,7 @@ public class ProductEmbeddingSynchronizer {
         }
         Product product = current.get();
         long version = product.getVersion() == null ? 0 : product.getVersion();
-        String content = contentBuilder.build(product);
+        String content = contentBuilder.build(product, contextLoader.load(product));
         if (content.isBlank()) {
             throw new PermanentSyncException("Product " + productId + " has no content to embed");
         }

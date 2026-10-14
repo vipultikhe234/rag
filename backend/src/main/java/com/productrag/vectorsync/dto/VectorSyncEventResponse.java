@@ -7,8 +7,13 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * {@code productId}, {@code productName} and {@code productSku} identify the aggregate: a product, or the brand,
+ * category, attribute or variant named by {@code aggregateType}.
+ */
 public record VectorSyncEventResponse(
         UUID id,
+        String aggregateType,
         UUID productId,
         String productName,
         String productSku,
@@ -26,7 +31,7 @@ public record VectorSyncEventResponse(
 
     public static VectorSyncEventResponse from(VectorSyncEvent event) {
         Map<String, Object> payload = event.getPayload();
-        return new VectorSyncEventResponse(event.getId(), event.getAggregateId(),
+        return new VectorSyncEventResponse(event.getId(), event.getAggregateType(), event.getAggregateId(),
                 payload == null ? null : (String) payload.get("name"),
                 payload == null ? null : (String) payload.get("sku"),
                 event.getEventType(), event.getStatus(), event.getAttempts(), event.getMaxAttempts(),

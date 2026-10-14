@@ -32,8 +32,15 @@ ai/                      this context folder
 
 - `product`: product CRUD, JSONB attributes, search/filters, outbox events for vector sync.
 - `catalog`: categories, brands, attribute definitions, variants (see `ai/context/`).
-- `vectorsync` + `embedding`: transactional outbox, pgvector embeddings of products only.
-- `rag` + `chat` + `ai`: retrieval (SQL filters + vector search), streaming chat, conversation history.
+- `vectorsync` + `embedding`: transactional outbox, pgvector embeddings of products and of brands, categories,
+  attributes and variants (`ai/context/catalog-embeddings.md`).
+- `rag` + `chat` + `ai`: retrieval (catalog overview, SQL filters, vector search), streaming chat,
+  conversation history.
+- `search`: `GET /products/semantic-search` — hybrid vector/keyword/SKU search verified by SQL filters
+  (`ai/context/semantic-search.md`); per-module `GET /{brands|categories|product-attributes|product-variants}/
+  semantic-search` (`ai/context/catalog-embeddings.md`).
+- `embedding` + `vectorsync`: product search document, pgvector store, outbox worker and repair actions
+  (`ai/context/product-embeddings.md`, `ai/context/embedding-sync.md`).
 - `auth`: JWT login, roles `ADMIN` / `USER`, admin bootstrap from `.env`.
 
 ## Commands (Windows / PowerShell)

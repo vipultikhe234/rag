@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { vectorSyncApi } from '../../api/endpoints'
 import { normalizeError } from '../../api/errors'
-import type { VectorSyncStatusSummary } from '../../api/types'
+import type { CatalogEntityType, VectorSyncStatusSummary } from '../../api/types'
 import { useToast } from '../../components/toast/toastContext'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -82,11 +82,12 @@ export function VectorSyncPanel({ refreshKey, onChanged }: VectorSyncPanelProps)
     )
   }
 
-  const healthy = status.failed === 0 && status.activeProductsWithoutEmbedding === 0
+  const catalogMissing = status.catalogIndex.reduce((sum, entry) => sum + entry.activeWithoutEmbedding, 0)
+  const healthy = status.failed === 0 && status.activeProductsWithoutEmbedding === 0 && catalogMissing === 0
   return (
     <Card
       title="AI search index"
-      description={`Embedding model ${status.embeddingModel} (${status.embeddingDimensions} dimensions). Product changes are indexed asynchronously.`}
+      description={`Embedding model ${status.embeddingModel} (${status.embeddingDimensions} dimensions). Catalog changes are indexed asynchronously.`}
       actions={
         <>
           <Button variant="ghost" size="sm" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
@@ -121,8 +122,21 @@ export function VectorSyncPanel({ refreshKey, onChanged }: VectorSyncPanelProps)
         <Stat label="Failed (needs action)" value={status.failedPermanent} danger={status.failedPermanent > 0} />
       </dl>
 
+      {status.catalogIndex.length > 0 && (
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          {status.catalogIndex.map((entry) => (
+            <Stat
+              key={entry.entityType}
+              label={`Indexed ${ENTITY_LABELS[entry.entityType]}${entry.activeWithoutEmbedding > 0 ? ` (${entry.activeWithoutEmbedding} missing)` : ''}`}
+              value={entry.embedded}
+              warn={entry.activeWithoutEmbedding > 0}
+            />
+          ))}
+        </dl>
+      )}
+
       {healthy && status.pending === 0 && (
-        <p className="mt-3 text-sm text-emerald-700">All active products are indexed.</p>
+        <p className="mt-3 text-sm text-emerald-700">All active products, brands, categories, attributes and variants are indexed.</p>
       )}
 
       {expanded && (
@@ -149,11 +163,27 @@ export function VectorSyncPanel({ refreshKey, onChanged }: VectorSyncPanelProps)
               onClick={() =>
                 void run('resync', async () => {
                   const result = await vectorSyncApi.resyncMissing()
-                  return `${result.enqueued} product(s) queued for indexing.`
+                  return `${result.enqueued} product(s) and ${result.catalogEnqueued} brand/category/attribute/variant record(s) queued for indexing.`
                 })
               }
             >
-              Index missing products
+              Index missing
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={busy === 'refresh-stale'}
+              onClick={() =>
+                void run('refresh-stale', async () => {
+                  const result = await vectorSyncApi.refreshStale()
+                  const checked = result.checked + result.catalog.checked
+                  const stale = result.stale + result.catalog.stale
+                  const enqueued = result.enqueued + result.catalog.enqueued
+                  return `${checked} active record(s) checked, ${stale} out of date, ${enqueued} queued for re-indexing.`
+                })
+              }
+            >
+              Refresh outdated embeddings
             </Button>
             {status.oldestPendingAt && (
               <span className="self-center text-xs text-slate-500">
@@ -168,7 +198,7 @@ export function VectorSyncPanel({ refreshKey, onChanged }: VectorSyncPanelProps)
                 <caption className="sr-only">Recent vector sync failures</caption>
                 <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th scope="col" className="px-3 py-2">Product</th>
+                    <th scope="col" className="px-3 py-2">Record</th>
                     <th scope="col" className="px-3 py-2">Event</th>
                     <th scope="col" className="px-3 py-2">Attempts</th>
                     <th scope="col" className="px-3 py-2">Error</th>
@@ -181,7 +211,9 @@ export function VectorSyncPanel({ refreshKey, onChanged }: VectorSyncPanelProps)
                     <tr key={event.id}>
                       <td className="px-3 py-2">
                         <div className="font-medium text-slate-900">{event.productName ?? '—'}</div>
-                        <div className="text-xs text-slate-500">{event.productSku ?? event.productId}</div>
+                        <div className="text-xs text-slate-500">
+                          {humanize(event.aggregateType ?? 'PRODUCT')} · {event.productSku ?? event.productId}
+                        </div>
                       </td>
                       <td className="px-3 py-2">{humanize(event.eventType)}</td>
                       <td className="px-3 py-2">
@@ -218,6 +250,13 @@ export function VectorSyncPanel({ refreshKey, onChanged }: VectorSyncPanelProps)
       )}
     </Card>
   )
+}
+
+const ENTITY_LABELS: Record<CatalogEntityType, string> = {
+  BRAND: 'brands',
+  CATEGORY: 'categories',
+  ATTRIBUTE: 'attributes',
+  VARIANT: 'variants',
 }
 
 function Stat({ label, value, warn, danger }: { label: string; value: number; warn?: boolean; danger?: boolean }) {

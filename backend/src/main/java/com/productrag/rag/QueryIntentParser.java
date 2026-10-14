@@ -114,6 +114,11 @@ public class QueryIntentParser {
                     + "inventory pieces pcs whose where").split(" ")));
 
     public QueryIntent parse(String question, Collection<String> knownCategories, String defaultCurrency) {
+        return parse(question, knownCategories, List.of(), defaultCurrency);
+    }
+
+    public QueryIntent parse(String question, Collection<String> knownCategories, Collection<String> knownBrands,
+                             String defaultCurrency) {
         String lower = question.toLowerCase(Locale.ROOT);
         StringBuilder remaining = new StringBuilder(lower);
         List<ProductFilter> filters = new ArrayList<>();
@@ -231,7 +236,22 @@ public class QueryIntentParser {
             }
         }
 
-        // 7. Sorting hints
+        // 7. Brand: only when exactly one known brand is named ("Samsung or Apple?" compares, so no filter)
+        if (knownBrands != null) {
+            List<Matcher> mentioned = knownBrands.stream()
+                    .filter(b -> b != null && !b.isBlank())
+                    .distinct()
+                    .map(b -> brandPattern(b).matcher(remaining.toString()))
+                    .filter(Matcher::find)
+                    .toList();
+            if (mentioned.size() == 1) {
+                Matcher matcher = mentioned.getFirst();
+                filters.add(ProductFilter.brand(matcher.group()));
+                blank(remaining, matcher.start(), matcher.end());
+            }
+        }
+
+        // 8. Sorting hints
         SortHint sortHint = null;
         for (Map.Entry<SortHint, Pattern> entry : SORT_HINTS.entrySet()) {
             Matcher matcher = entry.getValue().matcher(remaining.toString());
@@ -264,6 +284,11 @@ public class QueryIntentParser {
                         + "|\\b" + cat + "\\s+(?:category|products|items|section)\\b"
                         + "|\\bcategory\\s*(?:is|=|:|named|called)?\\s*" + cat + "\\b"
                         + "|\\bhow\\s+many\\s+(?:active\\s+)?" + cat + "\\b");
+    }
+
+    private static Pattern brandPattern(String brand) {
+        return Pattern.compile("(?<![\\p{L}\\p{N}])" + Pattern.quote(brand.trim().toLowerCase(Locale.ROOT))
+                + "(?![\\p{L}\\p{N}])");
     }
 
     private static boolean isFollowedByUnit(String lower, int end) {

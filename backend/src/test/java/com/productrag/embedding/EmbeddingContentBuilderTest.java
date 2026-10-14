@@ -77,6 +77,39 @@ class EmbeddingContentBuilderTest {
     }
 
     @Test
+    void contextAddsCategoryPathAttributeLabelsWithUnitsAndVariantOptions() {
+        Product product = ProductTestData.headphones();
+        product.setAttributes(Map.of("battery-life", 30, "colour-name", "Black"));
+        ProductSearchContext context = new ProductSearchContext(List.of("Electronics", "Audio", "Headphones"),
+                Map.of("battery-life", new ProductSearchContext.AttributeLabel("Battery Life", "NUMBER", "hours")),
+                List.of(new ProductSearchContext.OptionSummary("Color", List.of("Black", "Blue")),
+                        new ProductSearchContext.OptionSummary("Size", List.of())));
+
+        String content = builder.build(product, context);
+
+        assertThat(content)
+                .contains("Category: Electronics > Audio > Headphones")
+                .contains("Battery Life: 30 hours")
+                .contains("colour-name: Black")
+                .contains("Options: Color: Black, Blue")
+                .doesNotContain("Size");
+        assertThat(builder.build(product, context)).isEqualTo(content);
+    }
+
+    @Test
+    void priceAndStockChangesKeepTheHashWithContext() {
+        Product product = ProductTestData.headphones();
+        ProductSearchContext context = new ProductSearchContext(List.of("Electronics"), Map.of(),
+                List.of(new ProductSearchContext.OptionSummary("Color", List.of("Black"))));
+        String before = builder.hash(builder.build(product, context));
+
+        product.setPrice(new BigDecimal("1.00"));
+        product.setStockQuantity(999);
+
+        assertThat(builder.hash(builder.build(product, context))).isEqualTo(before);
+    }
+
+    @Test
     void formatsListAttributes() {
         assertThat(EmbeddingContentBuilder.formatAttributes(Map.of("colors", List.of("black", "silver"))))
                 .isEqualTo("colors: black, silver");

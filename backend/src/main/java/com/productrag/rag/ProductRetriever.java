@@ -40,23 +40,32 @@ public class ProductRetriever {
     private final ProductEmbeddingStore embeddingStore;
     private final EmbeddingClient embeddingClient;
     private final QueryIntentParser intentParser;
+    private final CatalogOverview catalogOverview;
+    private final CatalogDiscovery catalogDiscovery;
     private final AppProperties.Rag settings;
     private final String defaultCurrency;
 
     public ProductRetriever(ProductRepository productRepository, ProductEmbeddingStore embeddingStore,
                             EmbeddingClient embeddingClient, QueryIntentParser intentParser,
+                            CatalogOverview catalogOverview, CatalogDiscovery catalogDiscovery,
                             AppProperties properties) {
         this.productRepository = productRepository;
         this.embeddingStore = embeddingStore;
         this.embeddingClient = embeddingClient;
         this.intentParser = intentParser;
+        this.catalogOverview = catalogOverview;
+        this.catalogDiscovery = catalogDiscovery;
         this.settings = properties.rag();
         this.defaultCurrency = properties.products().defaultCurrency();
     }
 
     public RetrievalResult retrieve(String question) {
+        Optional<RetrievalResult> overview = catalogOverview.answer(question);
+        if (overview.isPresent()) {
+            return overview.get();
+        }
         QueryIntent intent = intentParser.parse(question, productRepository.findDistinctActiveCategories(),
-                defaultCurrency);
+                productRepository.findDistinctActiveBrands(), defaultCurrency);
         List<String> applied = describe(intent.filters());
 
         if (intent.isAmbiguous()) {
@@ -64,6 +73,10 @@ public class ProductRetriever {
         }
         if (intent.sku() != null) {
             return exactSku(intent.sku());
+        }
+        Optional<RetrievalResult> discovery = catalogDiscovery.answer(question, intent);
+        if (discovery.isPresent()) {
+            return discovery.get();
         }
         boolean structuredOnly = !intent.hasSemanticContent()
                 && (intent.hasFilters() || intent.sortHint() != null || intent.countQuestion());

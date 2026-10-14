@@ -3,6 +3,7 @@
 ```mermaid
 flowchart TD
   Q[Question] --> N[Normalize + validate<br/>NFKC, control chars, ≤ 1000 chars]
+  N -->|"only about brands / categories / attributes / variants"| CA[CATALOG totals and lists from SQL<br/>no LLM call]
   N --> I[QueryIntentParser<br/>rule-based, no LLM]
   I -->|ambiguous numbers| CL[CLARIFICATION message<br/>no LLM call]
   I -->|SKU reference| SKU[EXACT_SKU lookup]
@@ -30,12 +31,13 @@ flowchart TD
 | Price comparison | "cost less than ₹1,000", "under 5k rupees", "between 1000 and 3000 price" | `price < 1000.00` etc. |
 | Stock comparison | "stock greater than 10", "out of stock", "in stock", "fewer than 5 units" | `stock_quantity > 10` etc. |
 | Category | a known category name appearing in the question | `category = audio` |
+| Brand | exactly one known active brand name as a whole word ("Levi's jeans"); two brands = comparison, no filter | `brand = levi's` |
 | Currency | ₹ / Rs / INR / $ / USD / € | `currency = INR` (defaults to INR for price filters) |
 | SKU | "SKU WH-001", or a SKU-like token such as `cbl-usb-c-1m` | exact lookup candidates |
 | Count | "how many …" | exact count from SQL |
 | Sorting | "cheapest", "most expensive", "highest stock" | ORDER BY hint |
 
-Only these fields (`PRICE`, `STOCK_QUANTITY`, `CATEGORY`, `CURRENCY`) and operators (`<`, `≤`, `>`, `≥`, `=`) exist,
+Only these fields (`PRICE`, `STOCK_QUANTITY`, `CATEGORY`, `BRAND`, `CURRENCY`) and operators (`<`, `≤`, `>`, `≥`, `=`) exist,
 as Java enums. Values are validated (non-negative, whole numbers for stock) and always bound as SQL parameters.
 The LLM never writes SQL and has no database access.
 
@@ -44,7 +46,21 @@ the answer is a **clarification request** and no retrieval or LLM call happens.
 
 ## 3. Retrieval strategies (`ProductRetriever`)
 
+- **CATALOG** (`CatalogOverview`, checked first) — questions that consist only of a subject word (brand(s),
+  category/categories, subcategories, attribute(s), specification(s), variant(s)) and question/filler words, e.g.
+  "how much brand we have", "list all categories". The answer is built from the whole table (names, active/inactive
+  counts, products per brand, category tree) and returned without the LLM. Before this, such a question went to
+  vector search, which returns only the few most similar products, so the model listed 2 brands instead of 41.
+  "Which brands make gaming laptops" contains other words and goes to DISCOVERY instead.
 - **EXACT_SKU** — case-insensitive SKU match among active products.
+- **DISCOVERY** (`CatalogDiscovery`, after the SKU check) — exactly one subject word (brand, category, attribute,
+  variant and their plurals/synonyms), a cue word (which, what, best, top, recommend, suggest, find, show, list, any,
+  good, suitable) and other topic words, e.g. "which brands make gaming laptops", "which category fits running gear".
+  The topic is embedded and matched against `catalog_embeddings` of that type (name matches first, then
+  `similarity ≥ RAG_SIMILARITY_THRESHOLD`, weak matches dropped by `RAG_RELATIVE_SCORE_MARGIN`, at most 5). The answer
+  lists the entities from live rows (brand product counts, category path, attribute type/unit/categories, variant
+  price and stock) without the LLM and says it is a relevance ranking, not a complete list. Questions with price or
+  stock conditions or an explicit SKU skip this step, and when nothing is relevant the normal product strategies run.
 - **STRUCTURED** — filters without descriptive text: a JPA Specification query with the filters, ordered by the sort
   hint, limited to `RAG_STRUCTURED_RESULT_LIMIT`; `totalMatches` is the exact SQL count, which the prompt states as
   authoritative ("When a retrieval summary states an exact count … use that count").

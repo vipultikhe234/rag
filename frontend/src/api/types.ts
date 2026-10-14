@@ -352,7 +352,7 @@ export interface SourceReference {
 }
 
 export interface RetrievalInfo {
-  strategy: 'EXACT_SKU' | 'STRUCTURED' | 'HYBRID' | 'SEMANTIC' | 'CLARIFICATION' | string
+  strategy: 'EXACT_SKU' | 'STRUCTURED' | 'HYBRID' | 'SEMANTIC' | 'CLARIFICATION' | 'CATALOG' | 'DISCOVERY' | string
   appliedFilters: string[]
   totalMatches: number | null
   llmUsed: boolean
@@ -383,8 +383,12 @@ export interface ChatMessage {
   createdAt: string
 }
 
+export type CatalogEntityType = 'BRAND' | 'CATEGORY' | 'ATTRIBUTE' | 'VARIANT'
+
 export interface VectorSyncEvent {
   id: string
+  /** PRODUCT or a CatalogEntityType; productId/productName/productSku then describe that entity. */
+  aggregateType: 'PRODUCT' | CatalogEntityType
   productId: string
   productName: string | null
   productSku: string | null
@@ -415,7 +419,25 @@ export interface VectorSyncStatusSummary {
   oldestPendingAt: string | null
   embeddedProducts: number
   activeProductsWithoutEmbedding: number
+  catalogIndex: CatalogIndexStatus[]
   recentFailures: VectorSyncEvent[]
+}
+
+export interface CatalogIndexStatus {
+  entityType: CatalogEntityType
+  embedded: number
+  activeWithoutEmbedding: number
+}
+
+export interface StaleScanCounts {
+  checked: number
+  stale: number
+  enqueued: number
+}
+
+/** Top-level counts are products; `catalog` covers brands, categories, attributes and variants. */
+export interface RefreshStaleResult extends StaleScanCounts {
+  catalog: StaleScanCounts & { byType: Partial<Record<CatalogEntityType, StaleScanCounts>> }
 }
 
 export interface FieldViolation {

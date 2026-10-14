@@ -18,16 +18,20 @@ import com.productrag.common.exception.BadRequestException;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.FieldValidationException;
 import com.productrag.common.exception.NotFoundException;
+import com.productrag.embedding.CatalogEntityType;
 import com.productrag.config.AppProperties;
 import com.productrag.product.Product;
 import com.productrag.product.ProductRepository;
 import com.productrag.product.image.ProductImage;
 import com.productrag.product.image.ProductImageResponse;
 import com.productrag.product.image.ProductImageService;
+import com.productrag.vectorsync.VectorSyncEventType;
+import com.productrag.vectorsync.VectorSyncOutbox;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,18 +63,20 @@ public class ProductVariantService {
     private final AttributeValueValidator attributeValueValidator;
     private final ProductOptionService optionService;
     private final ProductImageService imageService;
+    private final VectorSyncOutbox outbox;
     private final int lowStockThreshold;
 
     public ProductVariantService(ProductVariantRepository variantRepository, ProductRepository productRepository,
                                  CategoryRepository categoryRepository, AttributeValueValidator attributeValueValidator,
                                  ProductOptionService optionService, ProductImageService imageService,
-                                 AppProperties properties) {
+                                 VectorSyncOutbox outbox, AppProperties properties) {
         this.variantRepository = variantRepository;
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.attributeValueValidator = attributeValueValidator;
         this.optionService = optionService;
         this.imageService = imageService;
+        this.outbox = outbox;
         this.lowStockThreshold = properties.products().lowStockThreshold();
     }
 
@@ -128,6 +134,14 @@ public class ProductVariantService {
         return toResponses(List.of(find(id))).get(0);
     }
 
+    /** Variants in the order of {@code ids}; unknown ids are skipped. */
+    @Transactional(readOnly = true)
+    public List<ProductVariantResponse> getAll(List<UUID> ids) {
+        Map<UUID, ProductVariant> found = new HashMap<>();
+        variantRepository.findAllById(ids).forEach(variant -> found.put(variant.getId(), variant));
+        return toResponses(ids.stream().map(found::get).filter(Objects::nonNull).toList());
+    }
+
     /** All variants of one product, oldest first (the Variants tab of Product Details). */
     @Transactional(readOnly = true)
     public List<ProductVariantResponse> listForProduct(UUID productId) {
@@ -144,6 +158,7 @@ public class ProductVariantService {
         requireVariantProduct(product, "productId");
         List<ProductVariant> created = createAll(product, List.of(request.toDraft()), "");
         productRepository.refreshVariantSummary(product.getId());
+        outbox.enqueue(product, VectorSyncEventType.PRODUCT_UPDATED);
         return toResponses(created).get(0);
     }
 
@@ -158,6 +173,7 @@ public class ProductVariantService {
         }
         List<ProductVariant> created = createAll(product, drafts, "variants");
         productRepository.refreshVariantSummary(product.getId());
+        outbox.enqueue(product, VectorSyncEventType.PRODUCT_UPDATED);
         return toResponses(created);
     }
 
@@ -218,6 +234,7 @@ public class ProductVariantService {
             optionService.assign(variant.getId(), product.getId(), combination);
             created.add(variant);
         }
+        outbox.enqueueEntities(CatalogEntityType.VARIANT, created.stream().map(ProductVariant::getId).toList());
         return created;
     }
 
@@ -243,6 +260,12 @@ public class ProductVariantService {
         if (barcode != null && variantRepository.existsByBarcodeAndIdNot(barcode, id)) {
             throw barcodeConflict(barcode);
         }
+        // The product's search document lists the option values of its active variants; price and stock are not in it.
+        boolean searchChange = !combination.signature().equals(variant.getOptionSignature())
+                || (request.status() != null && request.status() != variant.getStatus());
+        // The variant's own document shows its SKU and options (the title follows the options).
+        boolean ownDocumentChange = !combination.signature().equals(variant.getOptionSignature())
+                || !sku.equals(variant.getSku());
         apply(variant, product, request.toDraft(), sku, barcode, combination, imageService.images(product.getId()),
                 variant.getAttributes(), "", 0);
         if (request.status() != null) {
@@ -251,6 +274,12 @@ public class ProductVariantService {
         variantRepository.saveAndFlush(variant);
         optionService.assign(variant.getId(), product.getId(), combination);
         productRepository.refreshVariantSummary(product.getId());
+        if (searchChange) {
+            outbox.enqueue(product, VectorSyncEventType.PRODUCT_UPDATED);
+        }
+        if (ownDocumentChange) {
+            outbox.enqueueEntity(CatalogEntityType.VARIANT, variant.getId());
+        }
         return toResponses(List.of(variant)).get(0);
     }
 
@@ -258,10 +287,11 @@ public class ProductVariantService {
     public ProductVariantResponse changeStatus(UUID id, CatalogStatus status) {
         ProductVariant variant = find(id);
         if (variant.getStatus() != status) {
-            lockProduct(variant.getProduct().getId());
+            Product product = lockProduct(variant.getProduct().getId());
             variant.setStatus(status);
             variantRepository.saveAndFlush(variant);
-            productRepository.refreshVariantSummary(variant.getProduct().getId());
+            productRepository.refreshVariantSummary(product.getId());
+            outbox.enqueue(product, VectorSyncEventType.PRODUCT_UPDATED);
         }
         return toResponses(List.of(variant)).get(0);
     }

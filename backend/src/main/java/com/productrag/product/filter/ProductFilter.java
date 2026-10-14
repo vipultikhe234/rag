@@ -28,11 +28,11 @@ public record ProductFilter(FilterField field, FilterOperator operator, Object v
                     throw new IllegalArgumentException("Stock filters require a non-negative integer value");
                 }
             }
-            case CATEGORY -> {
-                if (!(value instanceof String category) || category.isBlank() || operator != FilterOperator.EQ) {
-                    throw new IllegalArgumentException("Category filters require EQ and a non-blank value");
+            case CATEGORY, BRAND -> {
+                if (!(value instanceof String text) || text.isBlank() || operator != FilterOperator.EQ) {
+                    throw new IllegalArgumentException(field.label() + " filters require EQ and a non-blank value");
                 }
-                value = category.trim().toLowerCase(Locale.ROOT);
+                value = text.trim().toLowerCase(Locale.ROOT);
             }
             case CURRENCY -> {
                 if (!(value instanceof String currency) || !currency.matches("^[A-Z]{3}$")
@@ -53,6 +53,10 @@ public record ProductFilter(FilterField field, FilterOperator operator, Object v
 
     public static ProductFilter category(String category) {
         return new ProductFilter(FilterField.CATEGORY, FilterOperator.EQ, category);
+    }
+
+    public static ProductFilter brand(String brand) {
+        return new ProductFilter(FilterField.BRAND, FilterOperator.EQ, brand);
     }
 
     public static ProductFilter currency(String currency) {
@@ -87,6 +91,7 @@ public record ProductFilter(FilterField field, FilterOperator operator, Object v
                 };
             }
             case CATEGORY -> ProductSpecifications.categoryEquals((String) value);
+            case BRAND -> ProductSpecifications.brandEquals((String) value);
             case CURRENCY -> ProductSpecifications.currencyEquals((String) value);
         };
     }

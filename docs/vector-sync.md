@@ -32,7 +32,16 @@ Relationship between the pieces:
 | Update | `PRODUCT_UPDATED` (+ `PRODUCT_DEACTIVATED`/`PRODUCT_REACTIVATED` if the status changed) |
 | Status change | `PRODUCT_DEACTIVATED` / `PRODUCT_REACTIVATED` |
 | Delete | `PRODUCT_DELETED` (payload keeps id, SKU, name, status, version) |
+| Brand renamed | `PRODUCT_UPDATED` for the brand's products |
+| Category renamed or moved (new parent) | `PRODUCT_UPDATED` for every product in the category **and its subcategories** (their category path changed) |
+| Attribute name / slug / type / unit changed | `PRODUCT_UPDATED` for products that have a value for it or a variant option linked to it |
+| Variant created, option combination changed, status changed | `PRODUCT_UPDATED` for the parent product (not for price-, stock-, barcode- or image-only edits) |
 | Admin "Index missing products" | `PRODUCT_RESYNC_REQUESTED` |
+| Admin "Refresh outdated embeddings" | `PRODUCT_RESYNC_REQUESTED` for ACTIVE products whose stored hash/model differs from the current document |
+
+Bulk events (category, attribute, refresh) are inserted with one `INSERT … SELECT` in the caller's transaction and
+skip products that already have a `PENDING` event. Every trigger is only a hint: the worker still compares the
+content hash, so a product whose document did not actually change is marked current without an embedding call.
 
 Processing is **state-based**: whatever the event type, the worker reconciles the vector with the product's
 *current* row. If the product no longer exists, its vectors are deleted (`VECTORS_DELETED`). This makes processing
@@ -40,9 +49,13 @@ idempotent and order-independent — re-processing an event or processing an old
 
 ## Which fields affect the embedding
 
-Embedded: **name, SKU, category, brand, description (≤ 6000 chars), attributes** (sorted by key; values ≤ 300 chars).
-Not embedded: **price, currency, stock, status, timestamps** — these change often and must always be read live from
-the database. Changing only price or stock therefore produces an `UNCHANGED` result with **no embedding API call**.
+Embedded (one document per product, `EmbeddingContentBuilder` + `JdbcProductSearchContextLoader`):
+**name, SKU, category path** (`Electronics > Mobile Phones`), **brand, description** (≤ 6000 chars),
+**attributes** with their definition name and, for NUMBER attributes, unit (`RAM: 12 GB`; sorted by key, values ≤ 300
+chars) and **option values offered by ACTIVE variants** (`Options: Color: Black, Blue; Storage Capacity: 256 GB`, at
+most 20 values per option).
+Not embedded: **price, compare-at price, currency, stock, status, variant SKUs/barcodes, brand and category
+descriptions, timestamps** — prices and stock change often and are always read live from the database. Changing only price or stock therefore produces an `UNCHANGED` result with **no embedding API call**.
 Deactivated products keep their vector but are filtered out at query time (`p.status = 'ACTIVE'`), so reactivation
 is instant and free.
 
@@ -121,6 +134,39 @@ disagree. To switch models:
 
 Even without a dimension change, a model change is detected per row (`embedding_model` differs) and triggers a fresh
 embedding the next time the product is processed; use "Index missing products" to cover all products.
+
+## Refreshing outdated embeddings
+
+`POST /api/v1/admin/vector-sync/refresh-stale` (button **Refresh outdated embeddings**) reads ACTIVE products in
+keyset batches of 200, rebuilds each document with the current code, compares its SHA-256 hash and the model with
+`product_embeddings`, and queues `PRODUCT_RESYNC_REQUESTED` for the differences. It returns
+`{checked, stale, enqueued}`. Nothing is embedded or deleted during the scan; the worker re-embeds outside any
+transaction and replaces vectors with an upsert, so search keeps working. Running it again is safe (current products
+and products with a pending event are skipped). Use it after changing the document format, after a same-dimension
+model change, or after bulk SQL edits that bypassed the API. Embeddings are never regenerated at startup.
+
+The same scan covers brands, categories, attributes and variants (`CatalogStaleEmbeddingScanner`); its counts are
+returned in a nested `catalog` object (`{checked, stale, enqueued, byType}`), so the top-level numbers stay products.
+
+## Brands, categories, attributes and variants
+
+Since V5 these have their own vectors in `catalog_embeddings` (unique `(entity_type, entity_id)`, same dimension and
+model as products). They go through the same outbox and worker: events carry `aggregate_type` BRAND / CATEGORY /
+ATTRIBUTE / VARIANT and the types `ENTITY_CHANGED`, `ENTITY_DELETED` and `ENTITY_RESYNC_REQUESTED`.
+
+| Document | Contents |
+|----------|----------|
+| Brand | name, description, categories of its active products, up to 20 active product names |
+| Category | name, path, description, subcategories, brands and up to 20 active product names in its subtree |
+| Attribute | name, type, unit, options, assigned categories |
+| Variant | title, SKU, product, brand, leaf category, option values with units |
+
+Triggers: the entity's own create/update/delete in its service, plus a fan-out from every product event to the
+product's brand, category chain (self and ancestors) and variants; when a product changes brand or category the
+previous brand and category chain are queued as well. A category rename/move queues its subtree, its old and new
+ancestors and (rename) the attributes assigned to it. Unchanged documents are skipped by hash. The upsert keeps the
+row built from the most recently read data (`source_read_at`), and a missing entity deletes its row.
+`resync-missing` returns `{enqueued, catalogEnqueued}`; the status endpoint adds `catalogIndex[]` per type.
 
 ## Future: multiple chunks per product
 

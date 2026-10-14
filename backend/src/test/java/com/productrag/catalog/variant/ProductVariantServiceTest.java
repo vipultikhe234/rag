@@ -30,6 +30,8 @@ import com.productrag.product.ProductStatus;
 import com.productrag.product.ProductTestData;
 import com.productrag.product.image.ProductImageService;
 import com.productrag.support.TestProperties;
+import com.productrag.vectorsync.VectorSyncEventType;
+import com.productrag.vectorsync.VectorSyncOutbox;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -60,6 +62,8 @@ class ProductVariantServiceTest {
     private ProductOptionService optionService;
     @Mock
     private ProductImageService imageService;
+    @Mock
+    private VectorSyncOutbox outbox;
 
     private final Map<UUID, ProductVariant> store = new HashMap<>();
     private ProductVariantService service;
@@ -68,7 +72,7 @@ class ProductVariantServiceTest {
     @BeforeEach
     void setUp() {
         service = new ProductVariantService(variantRepository, productRepository, categoryRepository,
-                attributeValueValidator, optionService, imageService, TestProperties.defaults());
+                attributeValueValidator, optionService, imageService, outbox, TestProperties.defaults());
         phone = ProductTestData.product("Samsung Galaxy S24", "GS24", "74999.00", 10, ProductStatus.ACTIVE);
         phone.setCategoryId(UUID.randomUUID());
         phone.setHasVariants(true);
@@ -228,6 +232,22 @@ class ProductVariantServiceTest {
                 Map.of("Color", "Black"), null, new BigDecimal("100.00"), null, 1, null, null, null, null)))
                 .isInstanceOfSatisfying(FieldValidationException.class, e ->
                         assertThat(e.getViolations().getFirst().field()).isEqualTo("productId"));
+    }
+
+    @Test
+    void onlyChangesVisibleInSearchReEmbedTheProduct() {
+        ProductVariantResponse created = service.create(request("GS24-11", Map.of("Color", "Black"), "100.00", null,
+                1));
+        verify(outbox).enqueue(phone, VectorSyncEventType.PRODUCT_UPDATED);
+
+        service.update(created.id(), request("GS24-11", Map.of("Color", "Black"), "90.00", null, 0));
+        verify(outbox, org.mockito.Mockito.times(1)).enqueue(phone, VectorSyncEventType.PRODUCT_UPDATED);
+
+        service.update(created.id(), request("GS24-11", Map.of("Color", "White"), "90.00", null, 0));
+        verify(outbox, org.mockito.Mockito.times(2)).enqueue(phone, VectorSyncEventType.PRODUCT_UPDATED);
+
+        service.changeStatus(created.id(), CatalogStatus.INACTIVE);
+        verify(outbox, org.mockito.Mockito.times(3)).enqueue(phone, VectorSyncEventType.PRODUCT_UPDATED);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.productrag.vectorsync;
 
+import com.productrag.embedding.CatalogEntityType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -25,6 +26,26 @@ import org.springframework.stereotype.Repository;
 public class JdbcOutboxStore implements OutboxStore {
 
     private static final int MAX_ERROR_LENGTH = 2000;
+    private static final VectorSyncEventType CHANGED = VectorSyncEventType.ENTITY_CHANGED;
+
+    /** id, display name and SKU of each entity type, aliased {@code s}, for the event payload. */
+    private static final Map<CatalogEntityType, String> ENTITY_ROWS = new EnumMap<>(Map.of(
+            CatalogEntityType.BRAND, "SELECT s.id, s.name, CAST(NULL AS varchar) AS sku FROM brands s",
+            CatalogEntityType.CATEGORY, "SELECT s.id, s.name, CAST(NULL AS varchar) AS sku FROM categories s",
+            CatalogEntityType.ATTRIBUTE, "SELECT s.id, s.name, CAST(NULL AS varchar) AS sku FROM product_attributes s",
+            CatalogEntityType.VARIANT, "SELECT s.id, p.name || ' - ' || s.variant_name AS name, s.sku "
+                    + "FROM product_variants s JOIN products p ON p.id = s.product_id"));
+
+    /** Wraps a list of category ids into "those categories and all their ancestors". */
+    private static final String ANCESTORS_OF = """
+            WITH RECURSIVE up(id, parent_id, depth) AS (
+                SELECT c.id, c.parent_id, 0 FROM categories c WHERE c.id IN (""";
+    private static final String ANCESTORS_END = """
+            )
+                UNION ALL
+                SELECT c.id, c.parent_id, u.depth + 1 FROM categories c JOIN up u ON c.id = u.parent_id
+                WHERE u.depth < 20)
+            SELECT id FROM up""";
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -48,12 +69,14 @@ public class JdbcOutboxStore implements OutboxStore {
                     ORDER BY c.created_at
                     LIMIT :limit
                     FOR UPDATE SKIP LOCKED)
-                RETURNING e.id, e.aggregate_id, e.event_type, e.attempts, e.max_attempts, e.created_at
+                RETURNING e.id, e.aggregate_type, e.aggregate_id, e.event_type, e.attempts, e.max_attempts,
+                          e.created_at
                 """;
         List<ClaimedRow> rows = jdbc.query(sql,
                 new MapSqlParameterSource().addValue("workerId", workerId).addValue("limit", limit),
                 (rs, rowNum) -> new ClaimedRow(new ClaimedEvent(
                         rs.getObject("id", UUID.class),
+                        rs.getString("aggregate_type"),
                         rs.getObject("aggregate_id", UUID.class),
                         VectorSyncEventType.valueOf(rs.getString("event_type")),
                         rs.getInt("attempts"),
@@ -164,6 +187,138 @@ public class JdbcOutboxStore implements OutboxStore {
                         """,
                 new MapSqlParameterSource()
                         .addValue("model", embeddingModel)
+                        .addValue("maxAttempts", maxAttempts));
+    }
+
+    @Override
+    public int enqueueForProducts(Collection<UUID> productIds, VectorSyncEventType type, int maxAttempts) {
+        if (productIds.isEmpty()) {
+            return 0;
+        }
+        return enqueueWhere("p.id IN (:ids)", new MapSqlParameterSource("ids", productIds), type, maxAttempts);
+    }
+
+    @Override
+    public int enqueueForCategories(Collection<UUID> categoryIds, VectorSyncEventType type, int maxAttempts) {
+        if (categoryIds.isEmpty()) {
+            return 0;
+        }
+        return enqueueWhere("p.category_id IN (:ids)", new MapSqlParameterSource("ids", categoryIds), type,
+                maxAttempts);
+    }
+
+    @Override
+    public int enqueueForAttribute(UUID attributeId, String slug, VectorSyncEventType type, int maxAttempts) {
+        return enqueueWhere("(jsonb_exists(p.attributes, :slug) OR EXISTS (SELECT 1 FROM product_options o "
+                        + "WHERE o.product_id = p.id AND o.attribute_id = :attributeId))",
+                new MapSqlParameterSource().addValue("slug", slug).addValue("attributeId", attributeId), type,
+                maxAttempts);
+    }
+
+    /** {@code condition} is always a constant from this class; values are bound as parameters. */
+    private int enqueueWhere(String condition, MapSqlParameterSource params, VectorSyncEventType type,
+                             int maxAttempts) {
+        return jdbc.update("""
+                        INSERT INTO vector_sync_events (id, aggregate_type, aggregate_id, event_type, payload, status,
+                                                        attempts, max_attempts, retryable, next_attempt_at,
+                                                        created_at, updated_at)
+                        SELECT gen_random_uuid(), 'PRODUCT', p.id, :type,
+                               jsonb_build_object('productId', p.id::text, 'sku', p.sku, 'name', p.name,
+                                                  'status', p.status, 'productVersion', p.version),
+                               'PENDING', 0, :maxAttempts, TRUE, now(), now(), now()
+                        FROM products p
+                        WHERE """ + " " + condition + """
+
+                          AND NOT EXISTS (SELECT 1 FROM vector_sync_events v
+                                          WHERE v.aggregate_id = p.id AND v.status = 'PENDING')
+                        """,
+                params.addValue("type", type.name()).addValue("maxAttempts", maxAttempts));
+    }
+
+    @Override
+    public int enqueueEntities(CatalogEntityType type, Collection<UUID> ids, VectorSyncEventType eventType,
+                               int maxAttempts) {
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        return enqueueEntitiesWhere(type, "s.id IN (:ids)", new MapSqlParameterSource("ids", ids), eventType,
+                maxAttempts);
+    }
+
+    @Override
+    public int enqueueProductDependents(Collection<UUID> productIds, int maxAttempts) {
+        if (productIds.isEmpty()) {
+            return 0;
+        }
+        MapSqlParameterSource ids = new MapSqlParameterSource("ids", productIds);
+        return enqueueEntitiesWhere(CatalogEntityType.BRAND,
+                "s.id IN (SELECT p.brand_id FROM products p WHERE p.id IN (:ids))", ids, CHANGED, maxAttempts)
+                + enqueueEntitiesWhere(CatalogEntityType.CATEGORY, "s.id IN (" + ANCESTORS_OF
+                        + "SELECT p.category_id FROM products p WHERE p.id IN (:ids)" + ANCESTORS_END + ")",
+                ids, CHANGED, maxAttempts)
+                + enqueueEntitiesWhere(CatalogEntityType.VARIANT, "s.product_id IN (:ids)", ids, CHANGED, maxAttempts);
+    }
+
+    @Override
+    public int enqueueCategoryChains(Collection<UUID> categoryIds, int maxAttempts) {
+        if (categoryIds.isEmpty()) {
+            return 0;
+        }
+        return enqueueEntitiesWhere(CatalogEntityType.CATEGORY, "s.id IN (" + ANCESTORS_OF + ":ids" + ANCESTORS_END
+                + ")", new MapSqlParameterSource("ids", categoryIds), CHANGED, maxAttempts);
+    }
+
+    @Override
+    public int enqueueAttributesOfCategories(Collection<UUID> categoryIds, int maxAttempts) {
+        if (categoryIds.isEmpty()) {
+            return 0;
+        }
+        return enqueueEntitiesWhere(CatalogEntityType.ATTRIBUTE,
+                "s.id IN (SELECT ac.attribute_id FROM product_attribute_categories ac WHERE ac.category_id IN (:ids))",
+                new MapSqlParameterSource("ids", categoryIds), CHANGED, maxAttempts);
+    }
+
+    @Override
+    public int enqueueVariantsOfAttribute(UUID attributeId, int maxAttempts) {
+        return enqueueEntitiesWhere(CatalogEntityType.VARIANT,
+                "s.id IN (SELECT vov.variant_id FROM variant_option_values vov "
+                        + "JOIN product_options o ON o.id = vov.option_id WHERE o.attribute_id = :attributeId)",
+                new MapSqlParameterSource("attributeId", attributeId), CHANGED, maxAttempts);
+    }
+
+    @Override
+    public int enqueueMissingCatalogEmbeddings(String embeddingModel, int maxAttempts) {
+        int total = 0;
+        for (CatalogEntityType type : CatalogEntityType.values()) {
+            total += enqueueEntitiesWhere(type, "s.status = 'ACTIVE' AND NOT EXISTS (SELECT 1 FROM catalog_embeddings e "
+                            + "WHERE e.entity_type = :entityType AND e.entity_id = s.id AND e.embedding_model = :model)",
+                    new MapSqlParameterSource().addValue("entityType", type.name()).addValue("model", embeddingModel),
+                    VectorSyncEventType.ENTITY_RESYNC_REQUESTED, maxAttempts);
+        }
+        return total;
+    }
+
+    /**
+     * One event per selected entity that has no PENDING event yet. {@code condition} is always a constant from this
+     * class over the alias {@code s} (the entity's table); values are bound as parameters.
+     */
+    private int enqueueEntitiesWhere(CatalogEntityType type, String condition, MapSqlParameterSource params,
+                                     VectorSyncEventType eventType, int maxAttempts) {
+        return jdbc.update("""
+                        INSERT INTO vector_sync_events (id, aggregate_type, aggregate_id, event_type, payload, status,
+                                                        attempts, max_attempts, retryable, next_attempt_at,
+                                                        created_at, updated_at)
+                        SELECT gen_random_uuid(), :aggregateType, x.id, :eventType,
+                               jsonb_strip_nulls(jsonb_build_object('entityType', :aggregateType, 'name', x.name,
+                                                                    'sku', x.sku)),
+                               'PENDING', 0, :maxAttempts, TRUE, now(), now(), now()
+                        FROM (""" + ENTITY_ROWS.get(type) + " WHERE " + condition + """
+                        ) x
+                        WHERE NOT EXISTS (SELECT 1 FROM vector_sync_events v
+                                          WHERE v.aggregate_id = x.id AND v.status = 'PENDING')
+                        """,
+                params.addValue("aggregateType", type.name())
+                        .addValue("eventType", eventType.name())
                         .addValue("maxAttempts", maxAttempts));
     }
 

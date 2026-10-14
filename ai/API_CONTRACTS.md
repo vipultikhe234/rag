@@ -29,7 +29,44 @@ Catalog endpoints below were verified against a running server on a scratch DB (
 | GET | `/products/categories` | distinct category names (legacy; the UI now uses `/categories/options`) |
 | POST | `/chat/stream` | SSE `meta`, `delta`, `done`/`error` |
 | GET/PATCH/DELETE | `/chat/conversations[/{id}]`, GET `/chat/conversations/{id}/messages` | owner only |
-| GET/POST | `/admin/vector-sync/status|events|retry/{eventId}|retry-failed|resync-missing` | admin |
+| GET/POST | `/admin/vector-sync/status|events|retry/{eventId}|retry-failed|resync-missing|refresh-stale` | admin; see below |
+| GET | `/products/semantic-search` | any authenticated user; see below |
+| GET | `/brands|categories|product-attributes|product-variants/semantic-search` | any authenticated user; see below |
+
+Vector sync admin (all modules):
+- `status` adds `catalogIndex[{entityType, embedded, activeWithoutEmbedding}]` (BRAND, CATEGORY, ATTRIBUTE, VARIANT).
+- `resync-missing` -> 202 `{enqueued (products), catalogEnqueued}`.
+- `refresh-stale` -> 202 `{checked, stale, enqueued` (products)`, catalog: {checked, stale, enqueued,
+  byType{BRAND|CATEGORY|ATTRIBUTE|VARIANT: {checked, stale, enqueued}}}}`.
+- Events (`events`, `recentFailures`) add `aggregateType`; for catalog events `productId`/`productName`/`productSku`
+  hold the entity id, name and (variants) SKU.
+
+Chat `retrieval.strategy` values: `CATALOG` (whole-table answer for brands/categories/attributes/variants
+questions, `llmUsed=false`, `totalMatches` = table size), `DISCOVERY` (brands/categories/attributes/variants
+ranked by relevance to a topic, e.g. "which brands make gaming laptops"; `llmUsed=false`, no product sources,
+`totalMatches` = entities listed; not used with price/stock conditions or an explicit SKU), `EXACT_SKU`,
+`STRUCTURED`, `HYBRID`, `SEMANTIC`, `CLARIFICATION`. Structured filters may include `brand = <name>`.
+
+### Catalog semantic search `GET /{brands|categories|product-attributes|product-variants}/semantic-search`
+- Params: `q*` (2-200 chars), `limit` (1-50, default 10). Bad values -> 400 `INVALID_PARAMETER`.
+- Response `{query, entityType, mode: HYBRID|KEYWORD_ONLY, embeddingModel, results[], warning}`; result
+  `{item, similarity|null, matchType: NAME|SEMANTIC|SEMANTIC_AND_NAME}` where `item` is the module's normal
+  response (`BrandResponse`, `CategoryResponse`, `ProductAttributeResponse`, `ProductVariantResponse`, read live).
+- Order: name matches (exact, prefix, contains; variants also product name and SKU), then vector similarity
+  >= `RAG_SIMILARITY_THRESHOLD`. ACTIVE entities only (variants also need an ACTIVE product).
+- Embedding provider failure -> 200 with `mode=KEYWORD_ONLY` and a `warning`.
+
+### Semantic search `GET /products/semantic-search`
+- Params: `q*` (2-200 chars), `categoryId` (subtree), `brandId`, `minPrice`/`maxPrice` (>= 0, min <= max),
+  `inStock` (bool), repeated `option=Name:Value` (max 5; all on the same ACTIVE variant; case-insensitive),
+  `limit` (1-50, default 10). Bad values -> 400.
+- Response `{query, mode: HYBRID|KEYWORD_ONLY, embeddingModel, appliedFilters[], results[], warning}`;
+  result `{product: ProductResponse, similarity|null (null for EXACT_SKU and KEYWORD),
+  matchType: EXACT_SKU|SEMANTIC|KEYWORD|SEMANTIC_AND_KEYWORD,
+  matchingVariants[{id, sku, variantName, price, compareAtPrice, stockQuantity}] (max 10)}`.
+- Order: exact SKU, vector similarity (desc), keyword-only. Price filter = simple product price or a matching
+  variant price; `inStock` = product stock > 0 (simple) or matching variant stock > 0. ACTIVE products only.
+- Embedding provider failure -> 200 with `mode=KEYWORD_ONLY` and a `warning` (not a 5xx).
 
 ### Products `/products`
 - Body `ProductRequest`: `name*, sku*, slug (max 200, lowercase-hyphen; generated from name when blank), description,

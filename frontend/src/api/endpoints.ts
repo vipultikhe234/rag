@@ -22,6 +22,7 @@ import type {
   ProductStatus,
   ProductVariant,
   ProductVariantPayload,
+  RefreshStaleResult,
   StockFilter,
   User,
   VariantDraft,
@@ -216,5 +217,9 @@ export const vectorSyncApi = {
     api.get<PageResponse<VectorSyncEvent>>('/admin/vector-sync/events', { params }).then((r) => r.data),
   retry: (eventId: string) => api.post<VectorSyncEvent>(`/admin/vector-sync/retry/${eventId}`).then((r) => r.data),
   retryAllFailed: () => api.post<{ requeued: number }>('/admin/vector-sync/retry-failed').then((r) => r.data),
-  resyncMissing: () => api.post<{ enqueued: number }>('/admin/vector-sync/resync-missing').then((r) => r.data),
+  resyncMissing: () =>
+    api
+      .post<{ enqueued: number; catalogEnqueued: number }>('/admin/vector-sync/resync-missing')
+      .then((r) => r.data),
+  refreshStale: () => api.post<RefreshStaleResult>('/admin/vector-sync/refresh-stale').then((r) => r.data),
 }

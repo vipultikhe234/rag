@@ -14,11 +14,13 @@ import com.productrag.common.api.PageResponse;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.FieldValidationException;
 import com.productrag.common.exception.NotFoundException;
+import com.productrag.embedding.CatalogEntityType;
 import com.productrag.product.Product;
 import com.productrag.product.ProductRepository;
 import com.productrag.vectorsync.VectorSyncEventType;
 import com.productrag.vectorsync.VectorSyncOutbox;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -94,6 +96,14 @@ public class CategoryService {
         return toResponses(List.of(find(id))).getFirst();
     }
 
+    /** Categories in the order of {@code ids}; unknown ids are skipped. */
+    @Transactional(readOnly = true)
+    public List<CategoryResponse> getAll(List<UUID> ids) {
+        Map<UUID, Category> found = categoryRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Category::getId, Function.identity()));
+        return toResponses(ids.stream().map(found::get).filter(Objects::nonNull).toList());
+    }
+
     @Transactional
     public CategoryResponse create(CategoryRequest request) {
         String name = request.name().trim();
@@ -108,7 +118,10 @@ public class CategoryService {
         validateParent(null, request.parentId(), null);
         apply(category, request, name, slug);
         category.setStatus(request.status() == null ? CatalogStatus.ACTIVE : request.status());
-        return get(categoryRepository.saveAndFlush(category).getId());
+        Category saved = categoryRepository.saveAndFlush(category);
+        // The new category and its ancestors, whose documents list their subcategories.
+        outbox.enqueueCategoryChains(List.of(saved.getId()));
+        return get(saved.getId());
     }
 
     @Transactional
@@ -125,6 +138,9 @@ public class CategoryService {
         }
         validateParent(id, request.parentId(), category.getParentId());
         boolean renamed = !name.equals(category.getName());
+        boolean moved = !Objects.equals(request.parentId(), category.getParentId());
+        UUID previousParentId = category.getParentId();
+        String previousDescription = category.getDescription();
         apply(category, request, name, slug);
         if (request.status() != null) {
             category.setStatus(request.status());
@@ -132,6 +148,19 @@ public class CategoryService {
         Category saved = categoryRepository.saveAndFlush(category);
         if (renamed) {
             propagateRename(saved);
+        }
+        if (renamed || moved) {
+            // Search documents contain the full category path, so products in subcategories change too.
+            List<UUID> subtree = categoryRepository.findSelfAndDescendantIds(saved.getId());
+            outbox.enqueueForCategories(subtree);
+            outbox.enqueueEntities(CatalogEntityType.CATEGORY, subtree);
+            // Old and new ancestors list their subcategories and the products below them.
+            outbox.enqueueCategoryChains(Arrays.asList(saved.getParentId(), previousParentId));
+            if (renamed) {
+                outbox.enqueueAttributesOfCategories(List.of(saved.getId()));
+            }
+        } else if (!Objects.equals(previousDescription, saved.getDescription())) {
+            outbox.enqueueEntity(CatalogEntityType.CATEGORY, saved.getId());
         }
         return get(saved.getId());
     }
@@ -161,6 +190,10 @@ public class CategoryService {
         if (attributeRepository.existsAssignedToCategory(id)) {
             throw new ConflictException("CATEGORY_HAS_ATTRIBUTES",
                     "The category has attribute definitions. Deactivate the category instead of deleting it.");
+        }
+        outbox.enqueueEntityDeleted(CatalogEntityType.CATEGORY, id);
+        if (category.getParentId() != null) {
+            outbox.enqueueCategoryChains(List.of(category.getParentId()));
         }
         categoryRepository.delete(category);
         categoryRepository.flush();

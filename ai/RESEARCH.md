@@ -67,3 +67,45 @@ assumed from memory beyond what these pages say.
 
 ## Not researched
 - Multi-currency price lists, tax, shipping, sales channels: out of scope for this admin.
+
+---
+
+# Semantic search and embedding sync research (2026-10-14)
+
+Fetched live for the `Requirment.txt` semantic-search task. Verified stack (code, not assumptions): PostgreSQL 16 +
+pgvector (`product_embeddings.embedding vector(N)`, cosine `<=>`), Spring AI 1.1 `EmbeddingModel` behind
+`ai/EmbeddingClient`, Ollama `nomic-embed-text` (768) locally or an OpenAI-compatible API.
+
+## Sources
+| # | Source | URL |
+|---|--------|-----|
+| P1 | pgvector README (HNSW, filtering, iterative scans) | https://github.com/pgvector/pgvector (raw `README.md`) |
+| N1 | Ollama library: nomic-embed-text | https://ollama.com/library/nomic-embed-text |
+| N2 | Hugging Face model card: nomic-embed-text-v1.5 | https://huggingface.co/nomic-ai/nomic-embed-text-v1.5 |
+
+## Findings
+1. **Distance and index** (P1). Cosine distance `<=>`; an HNSW index uses `vector_cosine_ops`. Without an index
+   pgvector does an exact scan (perfect recall). The project has no ANN index (31 products); `docs/vector-sync.md`
+   has the migration to add one.
+2. **Filtering with approximate indexes** (P1). Filters are applied *after* the HNSW scan; with the default
+   `hnsw.ef_search = 40` a query returns at most ~40 candidates, fewer when filters are selective. pgvector 0.8+
+   offers `hnsw.iterative_scan`. Consequence here: semantic search verifies filters on a bounded candidate list
+   (100) in a second SQL step; once an HNSW index exists, raise `ef_search` / enable iterative scans in the same
+   transaction, or candidates will be capped at ~40.
+3. **Model limits** (N1, N2). nomic-embed-text v1.5: 768 dimensions; Ollama serves it with a 2K-token context
+   window (the model supports 8192 natively). The search document is capped (description 6000 chars, 300 chars
+   per attribute value, 20 values per option) to stay near that window.
+4. **Task prefixes** (N2). The model card says documents should be embedded as `search_document: …` and queries
+   as `search_query: …`. The project embeds both without prefixes (works, but not the documented usage). Not
+   changed in this round: it changes every vector, the similarity distribution (threshold 0.25 / margin 0.1 were
+   tuned without prefixes) and is model-specific (OpenAI models must not get it). See `ai/TASKS.md`.
+
+## Design decisions
+| Decision | Why |
+|----------|-----|
+| One embedding per product; no brand, category, attribute or variant vectors | No user-facing semantic brand/category discovery use case; exact brand/category/option/stock questions are answered with SQL (requirement sections 3B-3E, 9). |
+| Product document = name, SKU, category path, brand, description, attribute labels + units, active variant option values | Requirement 3A; relationships make product text richer without extra vectors. Prices/stock excluded (change often, read live). |
+| Related-entity changes queue bulk `PRODUCT_UPDATED` events; the worker's hash check decides whether to embed | Reuses the existing outbox (requirement 7: no second queue); no embedding call when the text did not change. |
+| Catalog-level chat questions ("how many brands") answered from tables | Vector top-k cannot count or list a whole table; this caused the "2 brands instead of 41" answer. |
+| Semantic search API = exact SKU + vector + keyword candidates, then SQL verification | Requirement 8: embedding similarity never decides brand, category, price, option or stock constraints. |
+| Refresh-stale compares hashes in keyset batches and only queues events | Requirement 10: resumable, idempotent, no delete-before-replace, no work at startup. |

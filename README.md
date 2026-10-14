@@ -50,9 +50,16 @@ More documentation: [Architecture](docs/architecture.md) · [API examples](docs/
 
 ### Product Management
 
-- Create, edit, view and delete products (with confirmation).
+- Create, edit, view and delete products (with confirmation). The Add Product form has sections for basic
+  info, category and subcategory, specifications, pricing and inventory, options and variants, images (URLs) and a
+  final review; everything is saved in one transaction and you land on the Product Details page.
+- **Simple or variant products.** A variant product has up to 3 options (for example Color and Size); the form
+  generates every combination, skips duplicates and previews the variants before saving. Its price is the lowest
+  active variant price and its stock the total of active variants.
+- Product Details tabs: Overview, Specifications, Images, Variants, Inventory.
 - List with pagination and sorting; search by name, SKU, category or brand; filter by category (including
-  subcategories), brand, status and filterable attributes (for example RAM = 16).
+  subcategories), brand, status, price range, stock level, has variants and filterable attributes (for example
+  RAM = 16). Row actions: View, Edit, Manage variants, Activate/Deactivate.
 - Activate / deactivate products. Inactive products disappear from chat answers immediately.
 - Each product belongs to a category and optionally a brand. Attributes are stored as JSONB: values for the
   category's attribute definitions are type-checked, and other free-form keys (for example `features`) are allowed.
@@ -61,19 +68,34 @@ More documentation: [Architecture](docs/architecture.md) · [API examples](docs/
 
 ### Catalog administration
 
-Four modules under **Catalog** in the sidebar, each with list (search, filters, sorting, pagination), details,
-create and edit pages. Reads are open to every signed-in user; changes are admin-only.
+Products, Categories, Brands, Attributes and Variants sit under **Product Management** in the sidebar, each with
+list (search, filters, sorting, pagination), details, create and edit pages. Reads are open to every signed-in
+user; changes are admin-only.
 
-- **Categories**: a parent/child hierarchy with product, subcategory and attribute counts.
+- **Categories**: a parent/child hierarchy (no cycles) with product, subcategory and attribute counts. A category
+  under an inactive parent can't be newly assigned until the parent is reactivated.
 - **Brands**: optional website and logo URLs, with product counts.
-- **Attributes**: typed specifications (text, number, yes/no, select) defined on a category and inherited by its
-  subcategories. Each can be required and/or offered as a product-list filter.
-- **Variants**: sellable versions of a product with their own SKU, price, optional sale price and stock, with
-  low/out-of-stock indicators.
+- **Attributes**: typed specifications (text, number, yes/no, select, optional unit) assigned to one or more
+  categories and inherited by their subcategories. Names and slugs are unique. Each can be required and/or offered
+  as a product-list filter.
+- **Variants**: one per option combination, with a unique SKU, price, optional compare-at price ("On sale"), stock,
+  optional barcode and image, and low/out-of-stock indicators. A global list filters by SKU or name, product,
+  category, brand, status, price, stock and option values.
 
 Records are retired by **deactivating** them (with a confirmation). Existing links are kept, but inactive records
-can't be newly assigned. Only unused categories and brands can be deleted. Catalog records are not embedded and
-are not used by the chat.
+can't be newly assigned. Only unused categories and brands can be deleted.
+
+Every **product** is embedded (one vector per product). A product's search text includes its category path, brand,
+attribute names and units, and the option values of its active variants. Renaming a brand, category or attribute,
+moving a category, or changing a variant's options or status re-embeds the affected products. Price and stock edits
+don't trigger a re-embed.
+
+**Brands, categories, attributes and variants** have their own vectors too (table `catalog_embeddings`). A brand's
+text lists the categories and names of its active products; a category's text lists its path, subcategories,
+brands and products. They are kept in sync the same way (a product change also refreshes its brand, categories and
+variants). Use them through `GET /api/v1/{brands|categories|product-attributes|product-variants}/semantic-search`
+or ask the chat "which brands make gaming laptops?". Questions about totals ("how many brands do we have?") are
+still answered from the tables, and `GET /api/v1/products/semantic-search` filters by them with exact SQL.
 
 ### AI Chat (ChatGPT-style)
 
@@ -139,7 +161,7 @@ backend/                Spring Boot application (Maven Wrapper included)
   src/main/java/com/productrag/
     auth/               Users, JWT, login, admin bootstrap
     product/            Product entity, CRUD service/controller, structured filters
-    catalog/            Categories, brands, attribute definitions + value validation, variants
+    catalog/            Categories, brands, attribute definitions + value validation, options, variants
     embedding/          Embedding text builder, pgvector store (JDBC)
     vectorsync/         Transactional outbox, worker, retries, admin API, metrics
     rag/                Question parsing, retrieval strategies, prompt building, RAG service
@@ -350,9 +372,10 @@ Seeds `scripts/catalog-fixtures.json` through the REST API:
 - 30 categories (14 top level, 16 subcategories, 4 inactive).
 - 30 brands (3 inactive; official website URLs; no logo URLs, because no official logos are bundled).
 - 30 attributes (2 inactive, 2 required).
-- 30 variants (2 inactive, with sale prices and low/out-of-stock examples) on 10 prerequisite products.
+- 30 variants (2 inactive, 11 with a compare-at price, low/out-of-stock examples) on 10 prerequisite products.
 
-The prerequisite products don't count toward the 30. Credentials are read like the sample-product script, and
+Each prerequisite product is created together with its options and variants in one request. The prerequisite
+products don't count toward the 30. Credentials are read like the sample-product script, and
 `API_BASE_URL` defaults to `http://localhost:8080/api/v1`.
 
 - **Safety:** only `localhost`, `127.0.0.1` or `::1` targets are accepted.
@@ -390,15 +413,17 @@ All endpoints are under `/api/v1`. Full request and response examples: [docs/api
 |-----------------|---------|
 | `POST /auth/login`, `GET /auth/me` | Sign in (returns a JWT) and current user |
 | `GET /products`, `GET /products/{id}`, `GET /products/categories` | List, search, view |
+| `GET /products/semantic-search?q=…` | Natural-language search: SKU, vector and keyword matches, verified against `categoryId`, `brandId`, price, `inStock` and `option=Name:Value` filters |
 | `POST /products`, `PUT /products/{id}`, `PATCH /products/{id}/status`, `DELETE /products/{id}` | Manage products (admin) |
 | `GET/POST /categories`, `GET/PUT/PATCH/DELETE /categories/{id}`, `PATCH /categories/{id}/status`, `GET /categories/options` | Categories |
 | Same pattern for `/brands`, `/product-attributes` and `/product-variants` | Brands, attribute definitions, variants (attributes and variants have no `DELETE`) |
 | `GET /product-attributes/applicable?categoryId=` | Attributes for a category, including inherited ones |
+| `GET /products/{id}/variants`, `POST /products/{id}/variants` | A product's variants; add several in one transaction (admin) |
 | `POST /chat` | Ask a question and get the full answer as JSON |
 | `POST /chat/stream` | Ask a question and get the answer word by word as Server-Sent Events (used by the UI) |
 | `GET /chat/conversations`, `GET /chat/conversations/{id}/messages` | Conversation history |
 | `PATCH /chat/conversations/{id}`, `DELETE /chat/conversations/{id}` | Rename or delete a conversation |
-| `GET /admin/vector-sync/status`, `POST /admin/vector-sync/retry-failed`, … | Search index administration (admin) |
+| `GET /admin/vector-sync/status`, `POST /admin/vector-sync/retry-failed`, `…/resync-missing`, `…/refresh-stale` | Search index administration (admin) |
 
 ### Example: products
 
@@ -438,6 +463,11 @@ For streaming, call `POST /chat/stream` with `Accept: text/event-stream, applica
    counts and sorting. Ambiguous numeric questions ("under 1000": price or stock?) get a clarifying question
    instead of a guess.
 3. **Choose a strategy:**
+   - **Catalog**: a question only about brands, categories, attributes or variants ("how much brand we have",
+     "list all categories") is answered with exact totals and names from those tables, without the LLM.
+   - **Discovery**: "which brands make gaming laptops?", "which category fits running gear?" — the most relevant
+     brands, categories, attributes or variants from their embeddings, listed from live rows without the LLM
+     (a relevance ranking, not a complete list). Falls through to product search when nothing is relevant.
    - **Exact SKU** lookup.
    - **Structured** SQL with allow-listed fields and operators and bound parameters.
    - **Hybrid**: SQL filters plus vector search.
@@ -462,6 +492,15 @@ The LLM never generates or executes SQL. Details: [docs/rag-flow.md](docs/rag-fl
 4. Otherwise it calls the embedding API **outside any database transaction** and upserts the vector.
 5. Failures are retried with bounded exponential backoff. Permanent failures stop and are shown in the UI with a
    retry button.
+6. Renames of brands, categories (including subcategories below them) and attributes, category moves, and variant
+   option or status changes queue the affected products. Price- and stock-only edits do not.
+7. Brands, categories, attributes and variants use the same outbox (`aggregate_type` BRAND / CATEGORY / ATTRIBUTE /
+   VARIANT). Their own edits queue them, and every product event also queues the product's brand, category chain and
+   variants; documents whose hash didn't change are not re-embedded.
+8. **Refresh outdated embeddings** (`POST /api/v1/admin/vector-sync/refresh-stale`) compares every active product's,
+   brand's, category's, attribute's and variant's current text hash and model with its stored embedding and queues
+   only the differences. **Index missing** (`resync-missing`) queues active records without an embedding. Both are
+   resumable and delete nothing.
 
 The search index is therefore **eventually consistent**, typically a few seconds behind. Inactive or deleted
 products are excluded from answers immediately, regardless of sync state. Details:
@@ -482,6 +521,8 @@ Flyway runs automatically when the backend starts (`backend/src/main/resources/d
 | `V1__initial_schema.sql` | Creates the `vector` and `pg_trgm` extensions and the tables `app_users`, `products`, `product_embeddings`, `vector_sync_events`, `chat_conversations` and `chat_messages`, with constraints and indexes. The embedding column is `vector(${embedding_dimensions})`, taken from `EMBEDDING_DIMENSIONS`. |
 | `V2__align_embedding_dimension.sql` | Resizes the embedding column (and removes stored vectors) when the configured dimension changed, for example when switching from OpenAI (1536) to Ollama (768). Does nothing when the dimension already matches. |
 | `V3__catalog_modules.sql` | Creates `categories`, `brands`, `product_attributes` and `product_variants` and adds `category_id` / `brand_id` foreign keys to `products`. For existing products it creates one category per distinct `products.category` value and one brand per distinct `products.brand` value, then links them. The text columns are kept. Nothing is deleted. |
+| `V4__product_options_and_media.sql` | Adds product `slug` and `has_variants`, `product_images`, `product_options`, `product_option_values` and `variant_option_values` (one variant per option combination), variant `compare_at_price` (the old `sale_price` is converted), `barcode` and `image_id`, and a category join table so an attribute can belong to several categories. Existing variant attribute keys become options; variant products get their price and stock from their active variants. Back up the database before the first start with this version. |
+| `V5__catalog_embeddings.sql` | Adds `catalog_embeddings` (one vector per brand, category, attribute or variant, same dimension as products) and allows the new outbox event and aggregate types. Additive; no existing data changes. After the first start, click **Index missing** (or `POST /api/v1/admin/vector-sync/resync-missing`) to index existing records. |
 
 At startup the backend checks that the column dimension matches the configuration and refuses to start if not.
 
@@ -501,9 +542,10 @@ npm run build          # includes the TypeScript type check
 - **No test calls a paid AI API.** Unit tests use fakes and mocks; the integration test uses deterministic
   in-process embedding and chat models.
 - **No test touches your database.** Tests ignore the real `.env` (`APP_ENV_FILE` is redirected in `pom.xml`).
-- **Integration test (opt-in).** `ProductRagIntegrationTest` runs the whole stack (Flyway, pgvector, outbox,
-  chat) against a local PostgreSQL database. It is skipped unless `IT_DB_URL` points to a `localhost` database
-  whose name ends in `_test`; it **deletes all rows** in that database, so never point it at real data.
+- **Integration tests (opt-in).** `ProductRagIntegrationTest` runs the whole stack (Flyway, pgvector, outbox,
+  chat) and `ProductManagementIntegrationTest` covers products with options and variants, both against a local
+  PostgreSQL database. They are skipped unless `IT_DB_URL` points to a `localhost` database
+  whose name ends in `_test`; they **delete all rows** in that database, so never point it at real data.
 
   ```powershell
   # once, as a PostgreSQL superuser:  CREATE DATABASE ragdb_it_test;
@@ -513,8 +555,8 @@ npm run build          # includes the TypeScript type check
   .\mvnw.cmd test
   ```
 
-- Without `IT_DB_URL`: 203 backend tests run, 0 failures, 13 integration tests skipped. With `IT_DB_URL` set to
-  `ragdb_it_test`, all 13 integration tests pass. There are no frontend unit tests; lint and the production
+- Without `IT_DB_URL`: 240 backend tests run, 0 failures, 23 integration tests skipped. With `IT_DB_URL` set to
+  `ragdb_it_test`, all 23 integration tests pass. There are no frontend unit tests; lint and the production
   build pass.
 
 Coverage includes product CRUD, validation and duplicate SKUs, JWT and role-based access (401/403), outbox
@@ -527,9 +569,13 @@ Catalog coverage includes:
 
 - Duplicate names and slugs; parent cycles and inactive parents.
 - Blocked deletes for categories and brands that are in use.
-- Attribute options, slug clashes in a hierarchy, and value type checks; inherited, required and inactive
-  attributes.
-- Variant SKU clashes with products, `salePrice < price`, and stock levels.
+- Attribute options, global name/slug clashes, several categories per attribute, and value type checks;
+  inherited, required and inactive attributes.
+- Variant SKU and barcode clashes, duplicate option combinations (API and database), `compareAtPrice > price`,
+  stock levels, and the product's price/stock summary.
+- Creating a product with options and variants in one transaction (a failing variant rolls everything back),
+  option values in use, and server-side product and variant filters.
+- Categories under an inactive parent blocked until the parent is reactivated.
 - Inactive categories and brands kept on existing products but not newly assignable.
 - Admin-only writes on every catalog endpoint.
 - `CatalogFixturesTest`, which validates `scripts/catalog-fixtures.json` (30 per module, valid relationships and

@@ -15,7 +15,10 @@ import com.productrag.common.api.PageResponse;
 import com.productrag.common.exception.ConflictException;
 import com.productrag.common.exception.FieldValidationException;
 import com.productrag.common.exception.NotFoundException;
+import com.productrag.embedding.CatalogEntityType;
+import com.productrag.vectorsync.VectorSyncOutbox;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,12 +48,15 @@ public class ProductAttributeService {
     private final ProductAttributeRepository attributeRepository;
     private final CategoryRepository categoryRepository;
     private final CategoryAssignability assignability;
+    private final VectorSyncOutbox outbox;
 
     public ProductAttributeService(ProductAttributeRepository attributeRepository,
-                                   CategoryRepository categoryRepository, CategoryAssignability assignability) {
+                                   CategoryRepository categoryRepository, CategoryAssignability assignability,
+                                   VectorSyncOutbox outbox) {
         this.attributeRepository = attributeRepository;
         this.categoryRepository = categoryRepository;
         this.assignability = assignability;
+        this.outbox = outbox;
     }
 
     @Transactional(readOnly = true)
@@ -113,6 +119,14 @@ public class ProductAttributeService {
         return toResponses(List.of(find(id))).getFirst();
     }
 
+    /** Attributes in the order of {@code ids}; unknown ids are skipped. */
+    @Transactional(readOnly = true)
+    public List<ProductAttributeResponse> getAll(List<UUID> ids) {
+        Map<UUID, ProductAttribute> found = attributeRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(ProductAttribute::getId, Function.identity()));
+        return toResponses(ids.stream().map(found::get).filter(Objects::nonNull).toList());
+    }
+
     @Transactional(readOnly = true)
     public ProductAttribute find(UUID id) {
         return attributeRepository.findById(id)
@@ -124,18 +138,43 @@ public class ProductAttributeService {
         ProductAttribute attribute = new ProductAttribute();
         validateAndApply(attribute, request, null);
         attribute.setStatus(request.status() == null ? CatalogStatus.ACTIVE : request.status());
-        return get(attributeRepository.saveAndFlush(attribute).getId());
+        ProductAttribute saved = attributeRepository.saveAndFlush(attribute);
+        outbox.enqueueEntity(CatalogEntityType.ATTRIBUTE, saved.getId());
+        return get(saved.getId());
     }
 
     @Transactional
     public ProductAttributeResponse update(UUID id, ProductAttributeRequest request) {
         ProductAttribute attribute = find(id);
         checkVersion(request.version(), attribute.getVersion(), "attribute");
+        List<Object> shownInSearch = searchText(attribute);
+        List<Object> ownDocument = documentText(attribute);
+        // Product values stay keyed by the slug they were saved with.
+        String storedSlug = attribute.getSlug();
         validateAndApply(attribute, request, id);
         if (request.status() != null) {
             attribute.setStatus(request.status());
         }
-        return get(attributeRepository.saveAndFlush(attribute).getId());
+        ProductAttribute saved = attributeRepository.saveAndFlush(attribute);
+        if (!shownInSearch.equals(searchText(saved))) {
+            outbox.enqueueForAttribute(saved.getId(), storedSlug);
+        }
+        if (!ownDocument.equals(documentText(saved))) {
+            outbox.enqueueEntity(CatalogEntityType.ATTRIBUTE, saved.getId());
+        }
+        return get(saved.getId());
+    }
+
+    /** What product search documents show of an attribute: its name and its unit for numbers, looked up by slug. */
+    private static List<Object> searchText(ProductAttribute attribute) {
+        return Arrays.asList(attribute.getName(), attribute.getSlug(), attribute.getDataType(), attribute.getUnit());
+    }
+
+    /** What the attribute's own search document shows. */
+    private static List<Object> documentText(ProductAttribute attribute) {
+        return Arrays.asList(attribute.getName(), attribute.getDataType(), attribute.getUnit(),
+                List.copyOf(attribute.getOptions() == null ? List.of() : attribute.getOptions()),
+                Set.copyOf(attribute.getCategoryIds() == null ? Set.of() : attribute.getCategoryIds()));
     }
 
     @Transactional

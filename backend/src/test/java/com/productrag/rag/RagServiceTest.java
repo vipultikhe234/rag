@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 class RagServiceTest {
 
@@ -54,6 +55,7 @@ class RagServiceTest {
         llm = mock(LlmClient.class);
         var properties = TestProperties.defaults();
         ProductRetriever retriever = new ProductRetriever(repository, store, embeddingClient, new QueryIntentParser(),
+                new CatalogOverview(mock(NamedParameterJdbcTemplate.class)), mock(CatalogDiscovery.class),
                 properties);
         ragService = new RagService(retriever, new PromptBuilder(properties), llm);
 
@@ -109,6 +111,7 @@ class RagServiceTest {
     void weakMatchesFarBelowTheBestAreLeftOutOfTheContext() {
         var properties = TestProperties.withRelativeScoreMargin(0.1);
         ragService = new RagService(new ProductRetriever(repository, store, embeddingClient, new QueryIntentParser(),
+                new CatalogOverview(mock(NamedParameterJdbcTemplate.class)), mock(CatalogDiscovery.class),
                 properties), new PromptBuilder(properties), llm);
         when(store.searchActive(any(), anyString(), anyDouble(), anyInt(), anyList()))
                 .thenReturn(List.of(new ScoredProduct(headphones.getId(), 0.66), new ScoredProduct(speaker.getId(), 0.53)));

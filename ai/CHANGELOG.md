@@ -2,6 +2,60 @@
 
 Newest first. One entry per meaningful change; no conversation logs or source dumps.
 
+## 2026-10-14 — Product semantic search: SKU detection and EXACT_SKU similarity
+- `SemanticProductSearchService`: a query is looked up as an exact SKU only if it uses the SKU charset and contains
+  a digit or `.`/`_`/`-` (plain words like "phone" no longer query SKUs; `GS24` still does; `/` dropped as SKUs
+  can't contain it). `EXACT_SKU` hits now return `similarity: null`, as documented for non-vector matches.
+
+## 2026-10-14 — Embeddings for all catalog modules
+- DB: `V5__catalog_embeddings.sql` — shared `catalog_embeddings` table (BRAND/CATEGORY/ATTRIBUTE/VARIANT),
+  outbox `ENTITY_*` event types and an `aggregate_type` check. Applied to `ragdb_it_test` and `RagDB` (4 -> 5).
+- Rich documents (`CatalogDocumentLoader`), worker dispatch by aggregate type (`CatalogEmbeddingSynchronizer`),
+  triggers in the brand/category/attribute/variant services, product events fan out to brand, category chain and
+  variants; previous brand/category re-queued when a product moves.
+- New `GET /{brands|categories|product-attributes|product-variants}/semantic-search`; chat strategy `DISCOVERY`
+  ("which brands make gaming laptops?") answered from live rows without the LLM.
+- Admin: per-module index counts, `resync-missing` / `refresh-stale` cover all modules (backward-compatible
+  top-level product counts), `aggregateType` on events; vector sync panel shows module counts.
+- `RagDB` indexed: 38 brands, 36 categories, 28 attributes, 28 variants. The earlier rule "no embeddings for the
+  catalog admin modules" was lifted by the user (`ai/REQUIREMENTS.md`, `ai/CODING_RULES.md`).
+
+## 2026-10-14 — Semantic search and embedding sync (`Requirment.txt`)
+- Embedding document now includes the category path, attribute display names/units and active variant option
+  values (`ProductSearchContextLoader`); price/stock still excluded.
+- Re-embedding triggers: category rename/move queues the whole subtree; attribute name/slug/type/unit change
+  queues products using it; variant create, option change and status change queue the parent product.
+- New `GET /api/v1/products/semantic-search` (package `search`): exact SKU, vector and keyword candidates,
+  verified by SQL (category subtree, brand, price, stock, variant options), live prices, keyword-only fallback.
+- New `POST /api/v1/admin/vector-sync/refresh-stale` (`StaleEmbeddingScanner`) + "Refresh outdated embeddings"
+  button in the vector sync panel.
+- Chat: `CATALOG` retrieval strategy (`CatalogOverview`) answers brand/category/attribute/variant totals and lists
+  from the tables — "how many brands" now returns 41 instead of the 2 brands of the retrieved products; a single
+  named brand becomes an exact filter.
+- No migration. Docs: README, `docs/vector-sync.md`, `docs/rag-flow.md`, `docs/api-examples.md`,
+  `ai/RESEARCH.md`, new `ai/context/{product-embeddings,embedding-sync,semantic-search}.md`.
+
+## 2026-10-14 — Product management system (options, variants, images, V4)
+- DB: `V4__product_options_and_media.sql` — product slug / has_variants, images, options, option values,
+  variant option values (composite FKs, unique combination signature), compare-at price (from `sale_price`),
+  barcode, variant image, attribute-category join (global attribute slug/name), backfill. Verified on scratch DBs,
+  then applied to `RagDB` (V3 -> V4); migrated data checked via the API and seed rerun there: 0 created,
+  130 reused, 30/30/30/10/30.
+- Backend: product create with options + variants in one transaction; variant product price/stock summary;
+  `GET/POST /products/{id}/variants`; product filters (price range incl. variant prices, stock, hasVariants);
+  variant filters (category incl. subcategories, brand, `option=Name:Value`); categories expose `assignable` and
+  block assignment under an inactive ancestor; attributes many-to-many with `required` filter; attribute slug
+  clash now returns `SLUG_ALREADY_EXISTS` (name clash stays `ATTRIBUTE_ALREADY_EXISTS`); option without a linked
+  attribute no longer throws an NPE.
+- Frontend: "Product Management" nav group; product form in 7 sections (basic, category/subcategory, specs,
+  pricing, options + generated variants with preview, images, review); Product Details tabs (Overview,
+  Specifications, Images, Variants, Inventory); list filters and actions; attribute multi-category form;
+  variant pages with options, compare-at, barcode, image and new filters; field-level server errors.
+- Seed: fixtures and `seed-catalog.mjs` create each prerequisite product with its options and variants in one
+  request; rerun on scratch `ragdb_it_test`: 0 created, 130 reused, verification 30/30/30/10/30.
+- Tests: `mvnw test` 240 run, 0 failures, 23 skipped; new `ProductManagementIntegrationTest` (10 tests);
+  lint + build pass; browser check of the new flows passed.
+
 ## 2026-10-13 — No Docker, AI connection errors, admin layout, UI check
 - Removed `docker-compose.yml` and the Testcontainers dependencies; default `DB_URL` uses port 5432;
   `ProductRagIntegrationTest` is opt-in via `IT_DB_URL` (localhost `*_test` DB only) and raises the login rate

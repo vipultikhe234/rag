@@ -20,6 +20,19 @@ class QueryIntentParserTest {
     }
 
     @Test
+    void aSingleKnownBrandBecomesAnExactFilter() {
+        List<String> brands = List.of("Nike", "Levi's", "HP");
+
+        QueryIntent intent = parser.parse("Show Levi's jeans under 3000", CATEGORIES, brands, "INR");
+
+        assertThat(intent.filters()).contains(ProductFilter.brand("levi's"));
+        assertThat(parser.parse("nike or levi's shoes?", CATEGORIES, brands, "INR").filters())
+                .noneMatch(f -> f.field() == FilterField.BRAND);
+        assertThat(parser.parse("hpc cluster laptops", CATEGORIES, brands, "INR").filters())
+                .noneMatch(f -> f.field() == FilterField.BRAND);
+    }
+
+    @Test
     void priceBelowWithRupeeSymbolIsStructured() {
         QueryIntent intent = parse("Which products cost less than ₹1,000?");
 

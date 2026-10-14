@@ -90,6 +90,11 @@ public final class ProductSpecifications {
         return (root, query, cb) -> cb.equal(root.get("status"), status);
     }
 
+    public static Specification<Product> brandEquals(String brand) {
+        String value = brand.trim().toLowerCase(Locale.ROOT);
+        return (root, query, cb) -> cb.equal(cb.lower(root.get("brand")), value);
+    }
+
     public static Specification<Product> currencyEquals(String currency) {
         return (root, query, cb) -> cb.equal(root.get("currency"), currency);
     }

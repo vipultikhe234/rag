@@ -8,6 +8,7 @@ public enum FilterField {
     PRICE("p.price", "price"),
     STOCK_QUANTITY("p.stock_quantity", "stock quantity"),
     CATEGORY("lower(p.category)", "category"),
+    BRAND("lower(p.brand)", "brand"),
     CURRENCY("p.currency", "currency");
 
     private final String sqlExpression;

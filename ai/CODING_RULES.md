@@ -16,7 +16,9 @@
 - Writes: `@Transactional`, `saveAndFlush`, `version` check. Product changes must enqueue a
   `VectorSyncOutbox` event in the same transaction.
 - Catalog records are deactivated (`status`), not hard-deleted, when referenced.
-- Never call external AI/embedding APIs inside a long DB transaction. No embeddings for catalog admin tables.
+- Never call external AI/embedding APIs inside a long DB transaction. Brand/category/attribute/variant changes
+  that alter their search document enqueue an outbox event (`VectorSyncOutbox.enqueueEntity*`) in the same
+  transaction; product events fan out to the product's brand, category chain and variants automatically.
 - The LLM never executes SQL; product text is data, never instructions.
 
 ## Frontend (React)

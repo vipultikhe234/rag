@@ -1,6 +1,7 @@
-# Brands
+# Product brands
 
-**Status:** done — backend, UI, tests, seeded. UI not browser-tested. API details: `ai/API_CONTRACTS.md`.
+**Status:** done — backend, UI, tests, seeded; browser-checked (list filters, create/edit). Unchanged by V4.
+API details: `ai/API_CONTRACTS.md`.
 
 ## Files
 - Backend `catalog/brand/`: `Brand`, `BrandRepository`, `BrandSpecifications`, `BrandService`, `BrandController`
@@ -15,6 +16,7 @@
 - Inactive brands cannot be newly assigned (`ProductCatalogLinks.brand`); existing products keep them.
 - Rename updates `products.brand` text + `PRODUCT_UPDATED` outbox events.
 - `productCount` via grouped query `ProductRepository.countByBrandIds`.
+- Product list and global variant list filter by `brandId`.
 
 ## Seed data
 - The 30 names from the prompt: Samsung, Apple, Dell, HP, Lenovo, ASUS, Acer*, Sony, LG, Xiaomi, OnePlus,

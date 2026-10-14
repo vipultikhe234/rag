@@ -107,6 +107,7 @@ class ProductRagIntegrationTest {
         jdbc.update("DELETE FROM chat_messages");
         jdbc.update("DELETE FROM chat_conversations");
         jdbc.update("DELETE FROM vector_sync_events");
+        jdbc.update("DELETE FROM catalog_embeddings");
         jdbc.update("DELETE FROM product_variants");
         jdbc.update("DELETE FROM products");
         jdbc.update("DELETE FROM product_attributes");
@@ -133,7 +134,9 @@ class ProductRagIntegrationTest {
         assertThat(embeddingCount(id)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT vector_dims(embedding) FROM product_embeddings WHERE product_id = ?",
                 Integer.class, id)).isEqualTo(TestProperties.DIMENSIONS);
-        assertThat(embeddingModel.calls()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM catalog_embeddings", Integer.class))
+                .as("its brand and category").isEqualTo(2);
+        assertThat(embeddingModel.calls()).isEqualTo(3);
 
         mockMvc.perform(get("/api/v1/products/" + id).header("Authorization", adminToken))
                 .andExpect(status().isOk())
@@ -145,16 +148,18 @@ class ProductRagIntegrationTest {
         UUID id = createProduct("Wireless Headphones", "WH-001", "2499.00", 12, "Over-ear headphones.");
         processor.drain();
         String originalHash = contentHash(id);
+        int callsBefore = embeddingModel.calls();
 
         updateProduct(id, "Wireless Headphones", "WH-001", "2499.00", 12, "Over-ear headphones with a 40-hour battery.");
         processor.drain();
         assertThat(contentHash(id)).isNotEqualTo(originalHash);
-        assertThat(embeddingModel.calls()).isEqualTo(2);
+        assertThat(embeddingModel.calls()).as("brand and category summaries do not contain descriptions")
+                .isEqualTo(callsBefore + 1);
         assertThat(embeddingCount(id)).isEqualTo(1);
 
         updateProduct(id, "Wireless Headphones", "WH-001", "1999.00", 3, "Over-ear headphones with a 40-hour battery.");
         processor.drain();
-        assertThat(embeddingModel.calls()).isEqualTo(2);
+        assertThat(embeddingModel.calls()).isEqualTo(callsBefore + 1);
         assertThat(jdbc.queryForObject("SELECT result FROM vector_sync_events WHERE aggregate_id = ? "
                 + "ORDER BY created_at DESC LIMIT 1", String.class, id)).isEqualTo("UNCHANGED");
     }
@@ -234,21 +239,27 @@ class ProductRagIntegrationTest {
         assertThat(eventStatuses(id)).containsExactly("COMPLETED");
         assertThat(embeddingCount(id)).isEqualTo(1);
 
+        mockMvc.perform(post("/api/v1/admin/vector-sync/retry-failed").header("Authorization", adminToken))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.requeued").value(2));
+        processor.drain();
         mockMvc.perform(get("/api/v1/admin/vector-sync/status").header("Authorization", adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failed").value(0))
-                .andExpect(jsonPath("$.embeddedProducts").value(1));
+                .andExpect(jsonPath("$.embeddedProducts").value(1))
+                .andExpect(jsonPath("$.catalogIndex[?(@.entityType == 'BRAND')].embedded").value(1));
     }
 
     @Test
     void duplicateEventProcessingIsSafe() throws Exception {
         UUID id = createProduct("USB Cable", "USB-1", "299.00", 50, "Braided USB-C cable.");
         processor.drain();
+        int callsBefore = embeddingModel.calls();
         jdbc.update("UPDATE vector_sync_events SET status = 'PENDING', attempts = 0 WHERE aggregate_id = ?", id);
 
         processor.drain();
 
-        assertThat(embeddingModel.calls()).isEqualTo(1);
+        assertThat(embeddingModel.calls()).isEqualTo(callsBefore);
         assertThat(embeddingCount(id)).isEqualTo(1);
         assertThat(eventStatuses(id)).containsExactly("COMPLETED");
     }
